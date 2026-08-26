@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\Pendaftarans\PendaftaranResource;
 use App\Models\Pendaftaran;
+use App\Models\User;
 use BackedEnum;
 use Daljo25\FilamentTablerIcons\Enums\TablerIcon;
 use Filament\Actions\Action;
@@ -19,6 +20,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class KunjunganPasien extends Page implements HasTable
 {
@@ -36,8 +38,20 @@ class KunjunganPasien extends Page implements HasTable
 
     public function table(Table $table): Table
     {
+        /** @var User|null $user */
+        $user = Auth::user();
+        $query = Pendaftaran::query()->with(['pasien.tempatLahir', 'poli', 'dokter'])->latest('tanggal_pendaftaran');
+
+        // Otomatis filter antrian/kunjungan sesuai Poli penugasan staf yang login (Perawat Poli Umum vs Perawat Poli Gigi)
+        if ($user && ! $user->hasRole('super_admin')) {
+            $pegawai = $user->pegawai;
+            if ($pegawai && $pegawai->poli_id) {
+                $query->where('poli_id', $pegawai->poli_id);
+            }
+        }
+
         return $table
-            ->query(Pendaftaran::query()->with(['pasien.tempatLahir', 'poli', 'dokter'])->latest('tanggal_pendaftaran'))
+            ->query($query)
             ->searchPlaceholder('Cari No. RM / Nama Pasien...')
             ->searchDebounce('400ms')
             ->poll('10s')
@@ -131,7 +145,7 @@ class KunjunganPasien extends Page implements HasTable
                     ->placeholder('Semua Status'),
             ])
             ->actions([
-                // 1. Tombol Terima (Biru) - Jika status Menunggu
+                // 1. Tombol Terima (Biru) - Jika status Menunggu -> Otomatis Membuka Halaman Pemeriksaan
                 Action::make('terima')
                     ->label('Terima')
                     ->button()
@@ -144,12 +158,24 @@ class KunjunganPasien extends Page implements HasTable
 
                         Notification::make()
                             ->title('Pasien Diterima')
-                            ->body("Pasien {$record->pasien?->nama} telah diterima dan status diubah menjadi Sedang Diperiksa.")
+                            ->body("Pasien {$record->pasien?->nama} telah diterima dan masuk ke ruang pemeriksaan.")
                             ->success()
                             ->send();
+
+                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
                     }),
 
-                // 2. Tombol Selesaikan Pelayanan (Hijau) - Jika status Sedang Diperiksa
+                // 2. Tombol Masuk Pemeriksaan (Primary) - Saat status Sedang Diperiksa
+                Action::make('periksa')
+                    ->label('Pemeriksaan')
+                    ->button()
+                    ->color('primary')
+                    ->size('sm')
+                    ->icon('heroicon-m-clipboard-document-check')
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]))
+                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Sedang Diperiksa'),
+
+                // 2. Tombol Selesaikan Pelayanan (Hijau) - Khusus Dokter / Admin (Bukan Perawat)
                 Action::make('selesai')
                     ->label('Selesai')
                     ->button()
@@ -159,7 +185,29 @@ class KunjunganPasien extends Page implements HasTable
                     ->requiresConfirmation()
                     ->modalHeading('Selesaikan Pelayanan Pasien?')
                     ->modalDescription('Apakah pemeriksaan dan pelayanan pasien ini sudah selesai?')
-                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Sedang Diperiksa')
+                    ->visible(function (Pendaftaran $record): bool {
+                        if ($record->status_pelayanan !== 'Sedang Diperiksa') {
+                            return false;
+                        }
+
+                        /** @var User|null $user */
+                        $user = Auth::user();
+                        if (! $user) {
+                            return false;
+                        }
+
+                        // Super admin selalu diizinkan
+                        if ($user->hasRole('super_admin')) {
+                            return true;
+                        }
+
+                        // Perawat tidak memiliki akses menyelesaikan pelayanan (hanya Dokter & Admin)
+                        if ($user->hasRole('Perawat') || ($user->pegawai && $user->pegawai->profesi === 'Perawat')) {
+                            return false;
+                        }
+
+                        return true;
+                    })
                     ->action(function (Pendaftaran $record) {
                         $record->update(['status_pelayanan' => 'Selesai']);
 
@@ -170,17 +218,17 @@ class KunjunganPasien extends Page implements HasTable
                             ->send();
                     }),
 
-                // 3. Tombol Lihat Data Kunjungan (Abu-abu) - Jika sudah Diterima, Selesai, atau Batal
+                // 3. Tombol Lihat Data Detail Kunjungan (Abu-abu) - Mengarah ke Detail Kunjungan untuk Perawat, Dokter, dan Pendaftaran
                 Action::make('lihat')
                     ->label('Lihat')
                     ->button()
                     ->color('gray')
                     ->size('sm')
                     ->icon('heroicon-m-eye')
-                    ->url(fn (Pendaftaran $record): string => PendaftaranResource::getUrl('view', ['record' => $record->id]))
-                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, ['Sedang Diperiksa', 'Selesai', 'Batal'])),
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]))
+                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, ['Sedang Diperiksa', 'Selesai'])),
 
-                // 4. Tombol Batal (Merah) - Jika Menunggu atau Sedang Diperiksa
+                // 4. Tombol Batal (Merah) - HANYA saat status masih Menunggu (Sebelum Diterima)
                 Action::make('batal')
                     ->label('Batal')
                     ->button()
@@ -190,7 +238,7 @@ class KunjunganPasien extends Page implements HasTable
                     ->requiresConfirmation()
                     ->modalHeading('Batalkan Kunjungan Pasien?')
                     ->modalDescription('Apakah Anda yakin ingin membatalkan antrian pendaftaran kunjungan pasien ini?')
-                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, ['Menunggu', 'Sedang Diperiksa']))
+                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Menunggu')
                     ->action(function (Pendaftaran $record) {
                         $record->update(['status_pelayanan' => 'Batal']);
 

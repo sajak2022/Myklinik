@@ -112,11 +112,14 @@ class PegawaiForm
                             ->visible(fn($get) => $get('profesi') === 'Dokter'),
 
                         Select::make('poli_id')
-                            ->label('Poli')
+                            ->label('Poli Penugasan / Unit Layanan')
                             ->relationship('poli', 'nama')
                             ->searchable()
                             ->preload()
-                            ->visible(fn($get) => in_array($get('profesi'), ['Dokter', 'Perawat', 'Bidan'])),
+                            ->required(fn(Get $get) => in_array($get('profesi'), ['Dokter', 'Perawat', 'Bidan']))
+                            ->visible(fn(Get $get) => in_array($get('profesi'), ['Dokter', 'Perawat', 'Bidan']))
+                            ->helperText('Wajib: Tentukan penugasan Poli Umum atau Poli Gigi agar antrian dan riwayat tidak tertukar.')
+                            ->placeholder('Pilih Poli Penugasan (misal: Poli Umum / Poli Gigi)'),
 
                         TextInput::make('no_str')
                             ->label('No. STR')

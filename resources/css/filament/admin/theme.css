@@ -48,3 +48,8 @@ body {
 .fi-sidebar-item-icon {
     display: inline-flex !important;
 }
+
+/* Pastikan Sidebar Drawer Aplikasi Selalu di Atas saat Dibuka di Mobile */
+.fi-sidebar {
+    z-index: 50 !important;
+}

@@ -65,7 +65,9 @@ class PegawaiInfolist
                             ->placeholder('-'),
 
                         TextEntry::make('poli.nama')
-                            ->label('Poli')
+                            ->label('Poli Penugasan / Unit Layanan')
+                            ->badge()
+                            ->color('info')
                             ->placeholder('-'),
 
                         TextEntry::make('no_str')

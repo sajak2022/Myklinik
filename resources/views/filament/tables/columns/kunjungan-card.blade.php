@@ -25,43 +25,29 @@
     };
 @endphp
 
-<div class="py-2 text-left space-y-2 leading-relaxed">
+<div class="py-2 text-left space-y-1.5 leading-relaxed">
     {{-- Baris 1: No Registrasi - Waktu --}}
-    <div class="font-mono text-xs text-gray-500 dark:text-gray-400">
+    <div class="text-xs text-gray-500 dark:text-gray-400 font-medium">
         {{ $record->no_pendaftaran }} &bull; {{ $record->tanggal_pendaftaran?->format('d-m-Y H:i:s') ?? '-' }}
     </div>
 
-    {{-- Baris 2: NAMA PASIEN (Ukuran Sangat Jelas & Besar, Primary Focus) --}}
-    <div class="text-base sm:text-xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">
-        @if ($pasienUrl)
-            <a href="{{ $pasienUrl }}" target="_blank" class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline transition inline-flex items-center gap-1.5" title="Buka data rekam medis pasien">
-                <span class="text-primary-600 dark:text-primary-400 font-mono text-sm sm:text-base font-bold">[{{ $pasien->no_rm ?? '00.00.00.00' }}]</span>
-                <span>{{ $pasien->nama ?? 'Nama Pasien' }}</span>
-                @if ($pasien?->nama_panggilan)
-                    <span class="text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400">({{ $pasien->nama_panggilan }})</span>
-                @endif
-                <span class="text-xs text-primary-500 font-normal">↗</span>
-            </a>
-        @else
-            <span class="text-primary-600 dark:text-primary-400 font-mono text-sm sm:text-base font-bold">[{{ $pasien->no_rm ?? '00.00.00.00' }}]</span>
-            <span>{{ $pasien->nama ?? 'Nama Pasien' }}</span>
-            @if ($pasien?->nama_panggilan)
-                <span class="text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400">({{ $pasien->nama_panggilan }})</span>
-            @endif
-        @endif
+    {{-- Baris 2: NAMA PASIEN (Ukuran & Ketebalan Font Seragam) --}}
+    <div class="text-base font-bold tracking-tight leading-tight flex items-center gap-1.5">
+        <span class="text-primary-600 dark:text-primary-400 font-bold">[{{ $pasien->no_rm ?? '00001' }}]</span>
+        <span class="text-gray-900 dark:text-white font-bold">{{ $pasien->nama ?? 'Nama Pasien' }}</span>
     </div>
 
-    {{-- Baris 3, 4, 5: Informasi Pelayanan (Tujuan, DPJP biasa, Status) --}}
-    <div style="display: grid; grid-template-columns: 48px 10px 1fr; row-gap: 2px; font-size: 12px; line-height: 1.45; align-items: baseline;">
-        <span class="text-gray-500 dark:text-gray-400">Tujuan</span>
+    {{-- Baris 3, 4, 5: Informasi Pelayanan (Tujuan, DPJP, Status) --}}
+    <div style="display: grid; grid-template-columns: 48px 10px 1fr; row-gap: 3px; font-size: 12px; line-height: 1.45; align-items: baseline;">
+        <span class="text-gray-500 dark:text-gray-400 font-medium">Tujuan</span>
         <span class="text-gray-400 dark:text-gray-500" style="text-align: center;">:</span>
         <span class="font-semibold text-primary-600 dark:text-primary-400">{{ $poli->nama ?? 'Poli Umum' }}</span>
 
-        <span class="text-gray-500 dark:text-gray-400">DPJP</span>
+        <span class="text-gray-500 dark:text-gray-400 font-medium">DPJP</span>
         <span class="text-gray-400 dark:text-gray-500" style="text-align: center;">:</span>
-        <span class="text-gray-700 dark:text-gray-300 font-medium">{{ $namaDokter }}</span>
+        <span class="text-gray-800 dark:text-gray-200 font-semibold">{{ $namaDokter }}</span>
 
-        <span class="text-gray-500 dark:text-gray-400">Status</span>
+        <span class="text-gray-500 dark:text-gray-400 font-medium">Status</span>
         <span class="text-gray-400 dark:text-gray-500" style="text-align: center;">:</span>
         <span style="{{ $statusColor }}">{{ $statusText }}</span>
     </div>
