@@ -42,12 +42,15 @@ class PasienInfolist
                                                         return asset('profile/men.png');
                                                     })
                                                     ->size(110)
+                                                    ->extraImgAttributes([
+                                                        'class' => 'dark:invert dark:brightness-200 opacity-90 transition-all duration-200',
+                                                    ])
                                                     ->alignCenter(),
                                             ])
                                             ->compact()
                                             ->contained(true)
                                             ->extraAttributes([
-                                                'class' => 'bg-gray-100 dark:bg-gray-800/60 rounded-xl',
+                                                'class' => 'bg-gray-100 dark:bg-gray-800/80 rounded-xl',
                                             ]),
                                     ]),
 

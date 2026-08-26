@@ -4,18 +4,9 @@ namespace App\Filament\Resources\Pendaftarans\Tables;
 
 use App\Models\Pendaftaran;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ViewAction;
-use Filament\Forms\Components\DatePicker;
 use Filament\Support\Enums\Alignment;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Enums\FiltersLayout;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,46 +16,31 @@ class PendaftaransTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['pasien', 'poli', 'dokter']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->where('status_pelayanan', 'Menunggu')->with(['pasien', 'poli', 'dokter']))
             ->searchPlaceholder('Cari No. RM / Nama Pasien / No. Registrasi...')
             ->searchDebounce('400ms')
             ->columns([
-                TextColumn::make('no_pendaftaran')
-                    ->label('No. Registrasi')
-                    ->searchable()
-                    ->weight('bold')
-                    ->copyable(),
-
-                TextColumn::make('tanggal_pendaftaran')
-                    ->label('Waktu')
-                    ->dateTime('d/m/Y H:i'),
-
-                TextColumn::make('pasien.nama')
-                    ->label('Nama Pasien')
-                    ->searchable(['nama', 'no_rm', 'nama_panggilan'])
-                    ->weight('semibold')
-                    ->description(fn (Pendaftaran $record): ?string => $record->pasien ? "No. RM: {$record->pasien->no_rm}" : null),
-
-                TextColumn::make('poli.nama')
-                    ->label('Poli Layanan')
-                    ->badge()
-                    ->color('info')
-                    ->searchable(),
-
-                TextColumn::make('dokter.nama_lengkap')
-                    ->label('Dokter / DPJP')
-                    ->searchable()
-                    ->placeholder('-'),
-
-                TextColumn::make('status_pelayanan')
-                    ->label('Status')
-                    ->badge()
-                    ->colors([
-                        'warning' => 'Menunggu',
-                        'info'    => 'Sedang Diperiksa',
-                        'success' => 'Selesai',
-                        'danger'  => 'Batal',
-                    ]),
+                ViewColumn::make('kunjungan')
+                    ->label('Pengunjung')
+                    ->view('filament.tables.columns.kunjungan-card')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search) {
+                            $q->where('no_pendaftaran', 'like', "%{$search}%")
+                                ->orWhere('no_antrian', 'like', "%{$search}%")
+                                ->orWhere('no_asuransi', 'like', "%{$search}%")
+                                ->orWhereHas('pasien', function ($sq) use ($search) {
+                                    $sq->where('nama', 'like', "%{$search}%")
+                                        ->orWhere('no_rm', 'like', "%{$search}%")
+                                        ->orWhere('nama_panggilan', 'like', "%{$search}%");
+                                })
+                                ->orWhereHas('poli', function ($sq) use ($search) {
+                                    $sq->where('nama', 'like', "%{$search}%");
+                                })
+                                ->orWhereHas('dokter', function ($sq) use ($search) {
+                                    $sq->where('nama_lengkap', 'like', "%{$search}%");
+                                });
+                        });
+                    }),
 
                 ViewColumn::make('no_antrian')
                     ->label('Antrian')
@@ -73,75 +49,66 @@ class PendaftaransTable
             ])
             ->defaultSort('tanggal_pendaftaran', 'desc')
             ->filtersLayout(FiltersLayout::Dropdown)
-            ->filtersFormColumns(2)
-            ->filtersTriggerAction(
-                fn ($action) => $action
-                    ->button()
-                    ->label('Filter Data')
-                    ->icon('heroicon-m-funnel')
-                    ->size('sm')
-            )
+            ->recordUrl(null)
             ->filters([
-                // Filter Rentang Tanggal
-                Filter::make('periode')
-                    ->label('Rentang Tanggal')
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->form([
-                        DatePicker::make('dari_tanggal')
-                            ->label('Dari Tanggal')
-                            ->native(false)
-                            ->displayFormat('d/m/Y')
-                            ->placeholder('dd/mm/yyyy'),
-
-                        DatePicker::make('sampai_tanggal')
-                            ->label('Sampai Tanggal')
-                            ->native(false)
-                            ->displayFormat('d/m/Y')
-                            ->placeholder('dd/mm/yyyy'),
+                // Filter Periode Tanggal
+                SelectFilter::make('periode')
+                    ->label('Periode Waktu')
+                    ->placeholder('Hari Ini')
+                    ->options([
+                        'minggu_ini' => 'Minggu Ini',
+                        'bulan_ini'  => 'Bulan Ini',
+                        'tahun_ini'  => 'Tahun Ini',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['dari_tanggal'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate('tanggal_pendaftaran', '>=', $date),
-                            )
-                            ->when(
-                                $data['sampai_tanggal'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate('tanggal_pendaftaran', '<=', $date),
-                            );
+                        return match ($data['value'] ?? null) {
+                            'minggu_ini' => $query->whereBetween('tanggal_pendaftaran', [now()->startOfWeek(), now()->endOfWeek()]),
+                            'bulan_ini'  => $query->whereMonth('tanggal_pendaftaran', now()->month)->whereYear('tanggal_pendaftaran', now()->year),
+                            'tahun_ini'  => $query->whereYear('tanggal_pendaftaran', now()->year),
+                            default      => $query->whereDate('tanggal_pendaftaran', today()),
+                        };
                     }),
-
-                // Filter Poli
-                SelectFilter::make('poli_id')
-                    ->label('Poli / Ruangan')
-                    ->relationship('poli', 'nama')
-                    ->searchable()
-                    ->preload()
-                    ->placeholder('Semua Poli'),
-
-                // Filter Status Pelayanan
-                SelectFilter::make('status_pelayanan')
-                    ->label('Status Pelayanan')
-                    ->options([
-                        'Menunggu'         => 'Menunggu Antrian',
-                        'Sedang Diperiksa' => 'Sedang Dilayani',
-                        'Selesai'          => 'Selesai Pelayanan',
-                        'Batal'            => 'Pendaftaran Batal',
-                    ])
-                    ->placeholder('Semua Status'),
             ])
             ->actions([
-                ActionGroup::make([
-                    ViewAction::make()->label('Lihat Data Registrasi'),
-                    EditAction::make()->label('Ubah Data Registrasi'),
-                    DeleteAction::make()->label('Hapus Pendaftaran'),
-                ]),
-            ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                // 1. Tombol Terima (Atas) - Saat status Menunggu
+                Action::make('terima')
+                    ->label('Terima')
+                    ->button()
+                    ->color('info')
+                    ->size('sm')
+                    ->icon('heroicon-m-check-circle')
+                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Menunggu')
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => 'Sedang Diperiksa']);
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('Pasien Diterima')
+                            ->body("Pasien {$record->pasien?->nama} telah diterima dan masuk ke ruang pemeriksaan.")
+                            ->success()
+                            ->send();
+
+                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
+                    }),
+
+                // 2. Tombol Batal (Bawah) - Saat status Menunggu
+                Action::make('batal')
+                    ->label('Batal')
+                    ->button()
+                    ->color('danger')
+                    ->size('sm')
+                    ->icon('heroicon-m-x-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Kunjungan Pengunjung?')
+                    ->modalDescription('Apakah Anda yakin ingin membatalkan pendaftaran pengunjung ini?')
+                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Menunggu')
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => 'Batal']);
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('Pendaftaran Dibatalkan')
+                            ->warning()
+                            ->send();
+                    }),
             ]);
     }
 }

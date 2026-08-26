@@ -26,6 +26,59 @@ class PasienResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Master';
 
+    protected static ?string $recordTitleAttribute = 'nama';
+
+    public static function canGloballySearch(): bool
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+        if (! $user) {
+            return false;
+        }
+
+        // Nonaktifkan global search untuk Dokter dan Perawat
+        if ($user->hasRole(['Dokter', 'Perawat'])) {
+            return false;
+        }
+
+        if ($user->pegawai && in_array($user->pegawai->profesi, ['Dokter', 'Perawat'])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['no_rm', 'nama', 'norm_manual', 'nomor_kartu', 'nama_panggilan', 'alamat', 'kontaks.nomor_kontak'];
+    }
+
+    public static function getGlobalSearchEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['kontaks']);
+    }
+
+    public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string
+    {
+        return "[{$record->no_rm}] {$record->nama}" . ($record->nama_panggilan ? " ({$record->nama_panggilan})" : '');
+    }
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        /** @var Pasien $record */
+        $noHp = $record->kontaks?->first()?->nomor_kontak;
+
+        return [
+            'Tgl Lahir' => $record->tanggal_lahir ? \Carbon\Carbon::parse($record->tanggal_lahir)->format('d/m/Y') : '-',
+            'No. HP'    => ! empty($noHp) ? $noHp : '-',
+        ];
+    }
+
+    public static function getGlobalSearchResultUrl(\Illuminate\Database\Eloquent\Model $record): string
+    {
+        return static::getUrl('index', ['pasien_id' => $record->id]);
+    }
+
     public static function getNavigationLabel(): string
     {
         return 'Pasien';
@@ -33,7 +86,7 @@ class PasienResource extends Resource
 
     public static function getPluralModelLabel(): string
     {
-        return 'Daftar Pasien';
+        return 'Pasien';
     }
 
     public static function shouldRegisterNavigation(): bool

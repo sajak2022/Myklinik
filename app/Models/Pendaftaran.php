@@ -78,12 +78,25 @@ class Pendaftaran extends Model
     protected static function booted(): void
     {
         static::creating(function (Pendaftaran $pendaftaran) {
-            $today = Carbon::today();
-            $datePrefix = $today->format('Ymd');
+            // 0. Validasi: Cegah 1 pasien memiliki lebih dari 1 pendaftaran aktif sekaligus
+            if ($pendaftaran->pasien_id) {
+                $hasActive = static::where('pasien_id', $pendaftaran->pasien_id)
+                    ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                    ->exists();
+
+                if ($hasActive) {
+                    throw new \Exception('Pasien ini masih memiliki pendaftaran aktif yang belum selesai. Selesaikan pelayanan sebelumnya terlebih dahulu.');
+                }
+            }
+
+            $regDate = $pendaftaran->tanggal_pendaftaran
+                ? Carbon::parse($pendaftaran->tanggal_pendaftaran)->toDateString()
+                : Carbon::today()->toDateString();
+            $datePrefix = Carbon::parse($regDate)->format('Ymd');
 
             // 1. Auto No. Pendaftaran (REG-YYYYMMDD-0001)
             if (empty($pendaftaran->no_pendaftaran)) {
-                $latestToday = static::whereDate('tanggal_pendaftaran', $today)
+                $latestToday = static::whereDate('tanggal_pendaftaran', $regDate)
                     ->orderBy('id', 'desc')
                     ->first();
 
@@ -98,7 +111,7 @@ class Pendaftaran extends Model
 
             // 2. Auto No. Antrian (1, 2, 3, dst per Poli per hari)
             if (empty($pendaftaran->no_antrian)) {
-                $query = static::whereDate('tanggal_pendaftaran', $today);
+                $query = static::whereDate('tanggal_pendaftaran', $regDate);
                 if ($pendaftaran->poli_id) {
                     $query->where('poli_id', $pendaftaran->poli_id);
                 }

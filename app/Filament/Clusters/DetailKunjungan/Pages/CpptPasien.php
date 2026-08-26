@@ -150,6 +150,7 @@ class CpptPasien extends Page implements HasForms, HasTable
                             ->schema([
                                 TextInput::make('nama_ppa')
                                     ->label('Nama Profesional Pemberi Asuhan (PPA):')
+                                    ->readOnly()
                                     ->required()
                                     ->columnSpan(12),
 

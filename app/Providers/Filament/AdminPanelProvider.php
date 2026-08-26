@@ -45,6 +45,7 @@ class AdminPanelProvider extends PanelProvider
             ->spa()
             ->font('Poppins')
             ->sidebarCollapsibleOnDesktop()
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->colors([
                 'primary' => Color::Blue,
             ])
@@ -76,6 +77,10 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn () => view('filament.components.auth-styles')
+            )
+            ->renderHook(
+                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                fn () => view('filament.components.navbar-create-pasien')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,

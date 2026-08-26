@@ -22,11 +22,11 @@ class PendaftaranResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = TablerIcon::ReportMedical;
 
-    protected static ?string $modelLabel = 'Pendaftaran';
+    protected static ?string $modelLabel = 'Pengunjung';
 
-    protected static ?string $pluralModelLabel = 'Pendaftaran';
+    protected static ?string $pluralModelLabel = 'Pengunjung';
 
-    protected static ?string $navigationLabel = 'Pendaftaran';
+    protected static ?string $navigationLabel = 'Pengunjung';
 
     protected static ?int $navigationSort = 2;
 

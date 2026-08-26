@@ -228,33 +228,38 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                     ->columns(4)
                     ->schema([
                         TextInput::make('sistolik')
-                            ->label('Tekanan Darah Sistolik (mmHg)')
+                            ->label('TD Sistolik')
+                            ->suffix('mmHg')
                             ->numeric()
                             ->default(0)
                             ->live()
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('diastolik')
-                            ->label('Tekanan Darah Diastolik (mmHg)')
+                            ->label('TD Diastolik')
+                            ->suffix('mmHg')
                             ->numeric()
                             ->default(0),
 
                         TextInput::make('frekuensi_nadi')
-                            ->label('Frekuensi Nadi (X/Menit)')
+                            ->label('Frekuensi Nadi')
+                            ->suffix('x/mnt')
                             ->numeric()
                             ->default(0)
                             ->live()
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('frekuensi_nafas')
-                            ->label('Frekuensi Nafas (X/Menit)')
+                            ->label('Frekuensi Nafas')
+                            ->suffix('x/mnt')
                             ->numeric()
                             ->default(0)
                             ->live()
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('suhu')
-                            ->label('Suhu Tubuh (°C)')
+                            ->label('Suhu Tubuh')
+                            ->suffix('°C')
                             ->numeric()
                             ->step(0.1)
                             ->default(0)
@@ -262,20 +267,21 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('saturasi_o2')
-                            ->label('Saturasi O2 (%)')
+                            ->label('Saturasi O2')
+                            ->suffix('%')
                             ->numeric()
                             ->default(0)
                             ->live()
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
-                        Radio::make('alat_bantu_nafas')
+                        Select::make('alat_bantu_nafas')
                             ->label('Alat Bantu Nafas (Oksigen)')
                             ->options([
-                                'Tidak' => 'Tidak',
-                                'Ya'    => 'Ya',
+                                'Tidak' => 'Tidak (Udara Bebas)',
+                                'Ya'    => 'Ya (Oksigen Tambahan)',
                             ])
-                            ->inline()
                             ->default('Tidak')
+                            ->selectablePlaceholder(false)
                             ->live()
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get))
                             ->columnSpan(2),

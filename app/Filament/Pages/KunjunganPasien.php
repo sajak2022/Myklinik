@@ -9,6 +9,7 @@ use BackedEnum;
 use Daljo25\FilamentTablerIcons\Enums\TablerIcon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Alignment;
@@ -40,7 +41,10 @@ class KunjunganPasien extends Page implements HasTable
     {
         /** @var User|null $user */
         $user = Auth::user();
-        $query = Pendaftaran::query()->with(['pasien.tempatLahir', 'poli', 'dokter'])->latest('tanggal_pendaftaran');
+        $query = Pendaftaran::query()
+            ->whereIn('status_pelayanan', ['Sedang Diperiksa', 'Selesai'])
+            ->with(['pasien.tempatLahir', 'poli', 'dokter'])
+            ->latest('tanggal_pendaftaran');
 
         // Otomatis filter antrian/kunjungan sesuai Poli penugasan staf yang login (Perawat Poli Umum vs Perawat Poli Gigi)
         if ($user && ! $user->hasRole('super_admin')) {
@@ -58,7 +62,7 @@ class KunjunganPasien extends Page implements HasTable
             ->recordUrl(null)
             ->columns([
                 ViewColumn::make('kunjungan')
-                    ->label('Informasi Kunjungan Pasien')
+                    ->label('Kunjungan Pasien')
                     ->view('filament.tables.columns.kunjungan-card')
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function (Builder $q) use ($search) {
@@ -69,7 +73,7 @@ class KunjunganPasien extends Page implements HasTable
                                     $sq->where('nama', 'like', "%{$search}%")
                                         ->orWhere('no_rm', 'like', "%{$search}%")
                                         ->orWhere('nama_panggilan', 'like', "%{$search}%");
-                                })
+                                    })
                                 ->orWhereHas('poli', function ($sq) use ($search) {
                                     $sq->where('nama', 'like', "%{$search}%");
                                 })
@@ -86,167 +90,44 @@ class KunjunganPasien extends Page implements HasTable
             ])
             ->defaultSort('tanggal_pendaftaran', 'desc')
             ->filtersLayout(FiltersLayout::Dropdown)
-            ->filtersTriggerAction(
-                fn (Action $action) => $action
-                    ->button()
-                    ->label('Filter Data')
-                    ->icon('heroicon-m-funnel')
-                    ->size('sm')
-            )
             ->filtersFormColumns(2)
             ->filters([
-                // Filter Rentang Tanggal
-                Filter::make('periode')
-                    ->label('Rentang Tanggal')
-                    ->columns(2)
-                    ->columnSpanFull()
-                    ->form([
-                        DatePicker::make('dari_tanggal')
-                            ->label('Dari Tanggal')
-                            ->native(false)
-                            ->displayFormat('d/m/Y')
-                            ->placeholder('dd/mm/yyyy'),
-
-                        DatePicker::make('sampai_tanggal')
-                            ->label('Sampai Tanggal')
-                            ->native(false)
-                            ->displayFormat('d/m/Y')
-                            ->placeholder('dd/mm/yyyy'),
+                // Filter Periode Tanggal
+                SelectFilter::make('periode')
+                    ->label('Periode Waktu')
+                    ->placeholder('Hari Ini')
+                    ->options([
+                        'minggu_ini' => 'Minggu Ini',
+                        'bulan_ini'  => 'Bulan Ini',
+                        'tahun_ini'  => 'Tahun Ini',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['dari_tanggal'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate('tanggal_pendaftaran', '>=', $date),
-                            )
-                            ->when(
-                                $data['sampai_tanggal'] ?? null,
-                                fn (Builder $q, $date) => $q->whereDate('tanggal_pendaftaran', '<=', $date),
-                            );
+                        return match ($data['value'] ?? null) {
+                            'minggu_ini' => $query->whereBetween('tanggal_pendaftaran', [now()->startOfWeek(), now()->endOfWeek()]),
+                            'bulan_ini'  => $query->whereMonth('tanggal_pendaftaran', now()->month)->whereYear('tanggal_pendaftaran', now()->year),
+                            'tahun_ini'  => $query->whereYear('tanggal_pendaftaran', now()->year),
+                            default      => $query->whereDate('tanggal_pendaftaran', today()),
+                        };
                     }),
-
-                // Filter Poli / Ruangan
-                SelectFilter::make('poli_id')
-                    ->label('Ruangan / Poli')
-                    ->relationship('poli', 'nama')
-                    ->searchable()
-                    ->preload()
-                    ->placeholder('Semua Poli'),
 
                 // Filter Status Pelayanan
                 SelectFilter::make('status_pelayanan')
                     ->label('Status Pelayanan')
+                    ->placeholder('Pilih Status')
                     ->options([
-                        'Menunggu'         => 'Menunggu Antrian',
-                        'Sedang Diperiksa' => 'Sedang Dilayani',
-                        'Selesai'          => 'Selesai Pelayanan',
-                        'Batal'            => 'Batal',
-                    ])
-                    ->placeholder('Semua Status'),
+                        'Sedang Diperiksa' => 'Pasien Berada di ruangan ini / Sedang dilayani',
+                        'Selesai'          => 'Selesai',
+                    ]),
             ])
             ->actions([
-                // 1. Tombol Terima (Biru) - Jika status Menunggu -> Otomatis Membuka Halaman Pemeriksaan
-                Action::make('terima')
-                    ->label('Terima')
-                    ->button()
-                    ->color('info')
-                    ->size('sm')
-                    ->icon(null)
-                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Menunggu')
-                    ->action(function (Pendaftaran $record) {
-                        $record->update(['status_pelayanan' => 'Sedang Diperiksa']);
-
-                        Notification::make()
-                            ->title('Pasien Diterima')
-                            ->body("Pasien {$record->pasien?->nama} telah diterima dan masuk ke ruang pemeriksaan.")
-                            ->success()
-                            ->send();
-
-                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
-                    }),
-
-                // 2. Tombol Masuk Pemeriksaan (Primary) - Saat status Sedang Diperiksa
-                Action::make('periksa')
-                    ->label('Pemeriksaan')
-                    ->button()
-                    ->color('primary')
-                    ->size('sm')
-                    ->icon('heroicon-m-clipboard-document-check')
-                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]))
-                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Sedang Diperiksa'),
-
-                // 2. Tombol Selesaikan Pelayanan (Hijau) - Khusus Dokter / Admin (Bukan Perawat)
-                Action::make('selesai')
-                    ->label('Selesai')
-                    ->button()
-                    ->color('success')
-                    ->size('sm')
-                    ->icon('heroicon-m-check')
-                    ->requiresConfirmation()
-                    ->modalHeading('Selesaikan Pelayanan Pasien?')
-                    ->modalDescription('Apakah pemeriksaan dan pelayanan pasien ini sudah selesai?')
-                    ->visible(function (Pendaftaran $record): bool {
-                        if ($record->status_pelayanan !== 'Sedang Diperiksa') {
-                            return false;
-                        }
-
-                        /** @var User|null $user */
-                        $user = Auth::user();
-                        if (! $user) {
-                            return false;
-                        }
-
-                        // Super admin selalu diizinkan
-                        if ($user->hasRole('super_admin')) {
-                            return true;
-                        }
-
-                        // Perawat tidak memiliki akses menyelesaikan pelayanan (hanya Dokter & Admin)
-                        if ($user->hasRole('Perawat') || ($user->pegawai && $user->pegawai->profesi === 'Perawat')) {
-                            return false;
-                        }
-
-                        return true;
-                    })
-                    ->action(function (Pendaftaran $record) {
-                        $record->update(['status_pelayanan' => 'Selesai']);
-
-                        Notification::make()
-                            ->title('Pelayanan Selesai')
-                            ->body("Pelayanan pasien {$record->pasien?->nama} telah selesai.")
-                            ->success()
-                            ->send();
-                    }),
-
-                // 3. Tombol Lihat Data Detail Kunjungan (Abu-abu) - Mengarah ke Detail Kunjungan untuk Perawat, Dokter, dan Pendaftaran
+                // 1. Tombol Lihat Data Detail Kunjungan (Abu-abu)
                 Action::make('lihat')
                     ->label('Lihat')
                     ->button()
                     ->color('gray')
                     ->size('sm')
                     ->icon('heroicon-m-eye')
-                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]))
-                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, ['Sedang Diperiksa', 'Selesai'])),
-
-                // 4. Tombol Batal (Merah) - HANYA saat status masih Menunggu (Sebelum Diterima)
-                Action::make('batal')
-                    ->label('Batal')
-                    ->button()
-                    ->color('danger')
-                    ->size('sm')
-                    ->icon(null)
-                    ->requiresConfirmation()
-                    ->modalHeading('Batalkan Kunjungan Pasien?')
-                    ->modalDescription('Apakah Anda yakin ingin membatalkan antrian pendaftaran kunjungan pasien ini?')
-                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Menunggu')
-                    ->action(function (Pendaftaran $record) {
-                        $record->update(['status_pelayanan' => 'Batal']);
-
-                        Notification::make()
-                            ->title('Pendaftaran Dibatalkan')
-                            ->warning()
-                            ->send();
-                    }),
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
             ]);
     }
 }

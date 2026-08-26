@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Pasiens\Pages;
 
 use App\Filament\Resources\Pasiens\PasienResource;
 use Daljo25\FilamentTablerIcons\Enums\TablerIcon;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -38,11 +39,51 @@ class ViewPasien extends ViewRecord
 
     protected function getHeaderActions(): array
     {
+        $hasActive = \App\Models\Pendaftaran::where('pasien_id', $this->record->id)
+            ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+            ->exists();
+
         return [
+            Action::make('daftarkan')
+                ->label('Daftarkan Pasien')
+                ->icon(TablerIcon::UserPlus)
+                ->disabled($hasActive)
+                ->tooltip($hasActive ? 'Pasien ini masih memiliki antrian/pelayanan aktif yang belum selesai.' : 'Daftarkan Pasien')
+                ->iconButton()
+                ->size('md')
+                ->extraAttributes([
+                    'style' => 'margin-right: 6px !important;',
+                    'class' => $hasActive
+                        ? '!bg-gray-100 dark:!bg-gray-800/90 !text-amber-500 dark:!text-amber-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 opacity-60 shadow-sm'
+                        : '!bg-gray-100 hover:!bg-gray-200 dark:!bg-gray-800/90 dark:hover:!bg-gray-700/90 !text-emerald-600 dark:!text-emerald-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 transition shadow-sm',
+                ])
+                ->url(fn () => $hasActive ? null : \App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('create', ['pasien_id' => $this->record->id])),
+
+            Action::make('history')
+                ->label('History Pendaftaran')
+                ->icon(TablerIcon::History)
+                ->tooltip('History Pendaftaran')
+                ->iconButton()
+                ->size('md')
+                ->extraAttributes([
+                    'style' => 'margin-right: 6px !important;',
+                    'class' => '!bg-gray-100 hover:!bg-gray-200 dark:!bg-gray-800/90 dark:hover:!bg-gray-700/90 !text-purple-600 dark:!text-purple-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 transition shadow-sm',
+                ])
+                ->modalHeading(fn () => "History Pendaftaran Kunjungan Pasien {$this->record->nama} ({$this->record->no_rm})")
+                ->modalWidth('7xl')
+                ->modalContent(fn () => view('filament.infolists.components.history-pendaftaran', ['record' => $this->record]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Tutup'),
+
             EditAction::make()
-                ->label('')
+                ->label('Edit Pasien')
                 ->icon(TablerIcon::Edit)
-                ->tooltip('Edit Pasien'),
+                ->tooltip('Edit Pasien')
+                ->iconButton()
+                ->size('md')
+                ->extraAttributes([
+                    'class' => '!bg-gray-100 hover:!bg-gray-200 dark:!bg-gray-800/90 dark:hover:!bg-gray-700/90 !text-blue-600 dark:!text-blue-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 transition shadow-sm',
+                ]),
         ];
     }
 }

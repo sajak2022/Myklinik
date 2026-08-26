@@ -28,8 +28,6 @@ class UnitEksternalResource extends Resource
 
     protected static ?string $navigationLabel = 'Unit Kerja';
 
-    protected static ?string $recordTitleAttribute = 'nama';
-
     public static function form(Schema $schema): Schema
     {
         return UnitEksternalForm::configure($schema);
@@ -54,10 +52,5 @@ class UnitEksternalResource extends Resource
             'create' => CreateUnitEksternal::route('/create'),
             'edit' => EditUnitEksternal::route('/{record}/edit'),
         ];
-    }
-
-    public static function getGloballySearchableAttributes(): array
-    {
-        return ['nama'];
     }
 }

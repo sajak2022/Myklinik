@@ -37,12 +37,24 @@ class PendaftaranForm
                             ->relationship('pasien', 'nama')
                             ->getOptionLabelFromRecordUsing(fn (Pasien $record) => "{$record->no_rm} - {$record->nama}" . ($record->nama_panggilan ? " ({$record->nama_panggilan})" : ''))
                             ->searchable(['no_rm', 'nama', 'nomor_kartu'])
-                            ->preload()
                             ->required()
                             ->live()
                             ->columnSpan(2)
                             ->afterStateUpdated(function ($state, Set $set) {
                                 if ($state) {
+                                    $active = Pendaftaran::where('pasien_id', $state)
+                                        ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                                        ->first();
+
+                                    if ($active) {
+                                        Notification::make()
+                                            ->warning()
+                                            ->persistent()
+                                            ->title('Pasien Masih Dalam Pelayanan')
+                                            ->body("Pasien ini masih memiliki antrian/pelayanan aktif ({$active->no_pendaftaran} - {$active->poli?->nama} - Status: {$active->status_pelayanan}). Pelayanan sebelumnya harus diselesaikan terlebih dahulu.")
+                                            ->send();
+                                    }
+
                                     $pasien = Pasien::find($state);
                                     $hasHistory = Pendaftaran::where('pasien_id', $state)->exists();
                                     $set('jenis_kunjungan', $hasHistory ? 'Lama' : 'Baru');
@@ -58,9 +70,17 @@ class PendaftaranForm
                                     }
                                 }
                             })
-                            ->createOptionForm(fn (Schema $s) => \App\Filament\Resources\Pasiens\Schemas\PasienForm::configure($s))
-                            ->createOptionModalHeading('Tambah Data Pasien Baru')
-                            ->createOptionAction(fn ($action) => $action->tooltip('Tambah Pasien Baru (Belum Pernah Berobat)')),
+                            ->rules([
+                                fn (): \Closure => function (string $attribute, $value, \Closure $fail) {
+                                    $active = Pendaftaran::where('pasien_id', $value)
+                                        ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                                        ->exists();
+
+                                    if ($active) {
+                                        $fail('Pasien ini masih memiliki pendaftaran aktif yang belum selesai. Selesaikan atau batalkan pelayanan sebelumnya terlebih dahulu.');
+                                    }
+                                },
+                            ]),
 
                         DateTimePicker::make('tanggal_pendaftaran')
                             ->label('Waktu Pendaftaran')

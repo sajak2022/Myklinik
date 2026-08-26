@@ -28,8 +28,6 @@ class ReferensiResource extends Resource
 
     protected static ?string $navigationLabel = 'Referensi';
 
-    protected static ?string $recordTitleAttribute = 'nama';
-
     public static function form(Schema $schema): Schema
     {
         return ReferensiForm::configure($schema);
@@ -54,10 +52,5 @@ class ReferensiResource extends Resource
             'create' => CreateReferensi::route('/create'),
             'edit' => EditReferensi::route('/{record}/edit'),
         ];
-    }
-
-    public static function getGloballySearchableAttributes(): array
-    {
-        return ['nama', 'kode'];
     }
 }

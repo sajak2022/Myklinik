@@ -8,11 +8,8 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -21,7 +18,37 @@ class PasiensTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']))
+            ->modifyQueryUsing(function (Builder $query, Table $table) {
+                $livewire = $table->getLivewire();
+                $pasienId = $livewire->pasien_id ?? request()->query('pasien_id');
+                $search = $livewire->tableSearch ?? request()->query('tableSearch');
+
+                $filters = $livewire->tableFilters ?? [];
+                $semuaPasien = !empty($filters['semua_pasien']['isActive']);
+
+                // 1. Jika filter "Tampilkan Semua Pasien" diaktifkan
+                if ($semuaPasien) {
+                    return $query->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                }
+
+                // 2. Jika dipilih lewat Global Search -> Hanya tampilkan 1 pasien tersebut
+                if ($pasienId) {
+                    return $query->where('id', $pasienId)->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                }
+
+                // 3. Jika dicari lewat search bar tabel -> Tampilkan hasil yang dicari
+                if (filled($search)) {
+                    return $query->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                }
+
+                // 4. Default: Jangan tampilkan seluruh data pasien (tabel tetap kosong)
+                return $query->whereRaw('1 = 0');
+            })
+            ->searchPlaceholder('Ketik No. RM / Nama Pasien / NIK / Alamat...')
+            ->searchDebounce('400ms')
+            ->emptyStateHeading('Cari Data Pasien')
+            ->emptyStateDescription('Gunakan kolom Global Search di navbar atas (atau aktifkan filter Tampilkan Semua Pasien) untuk menampilkan data pasien.')
+            ->emptyStateIcon('heroicon-o-magnifying-glass')
             ->columns([
                 TextColumn::make('no')
                     ->label('No')
@@ -57,15 +84,12 @@ class PasiensTable
                 TextColumn::make('nama_ibu')
                     ->label('Nama Ibu')
                     ->placeholder('-')
-                    // Diambil dari relasi keluarga (hasMany) yang SHDK-nya "Ibu",
-                    // karena tidak ada kolom ibu terpisah di tabel pasiens.
                     ->state(fn($record) => optional(
                         $record->keluargas->first(
                             fn($k) => str_contains(strtolower((string) optional($k->statusKeluarga)->deskripsi), 'ibu')
                         )
                     )->nama),
 
-                // ===== Kolom tambahan, disembunyikan default (bisa dimunculkan lewat menu kolom) =====
                 TextColumn::make('norm_manual')
                     ->label('Nomor Rekam Medis')
                     ->searchable()
@@ -102,39 +126,10 @@ class PasiensTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Filter::make('tanggal_lahir')
-                    ->schema([
-                        DatePicker::make('tanggal_lahir')
-                            ->label('Tanggal Lahir'),
-                    ])
-                    ->query(
-                        fn(Builder $query, array $data): Builder => $query
-                            ->when($data['tanggal_lahir'], fn(Builder $query, $date): Builder => $query->whereDate('tanggal_lahir', $date))
-                    ),
-
-                Filter::make('alamat')
-                    ->schema([
-                        TextInput::make('alamat')
-                            ->label('Alamat Pasien'),
-                    ])
-                    ->query(
-                        fn(Builder $query, array $data): Builder => $query
-                            ->when($data['alamat'], fn(Builder $query, $value): Builder => $query->where('alamat', 'like', "%{$value}%"))
-                    ),
-
-                SelectFilter::make('jenis_kelamin')
-                    ->label('Jenis Kelamin')
-                    ->options([
-                        'Laki-Laki' => 'Laki-Laki',
-                        'Perempuan' => 'Perempuan',
-                    ]),
-
-                SelectFilter::make('status_pasien')
-                    ->label('Status')
-                    ->options([
-                        'Hidup' => 'Hidup / Aktif',
-                        'Meninggal' => 'Meninggal',
-                    ]),
+                Filter::make('semua_pasien')
+                    ->label('Tampilkan Semua Pasien')
+                    ->toggle()
+                    ->query(fn (Builder $query) => $query),
             ])
             ->recordActions([
                 ActionGroup::make([
