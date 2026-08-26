@@ -22,8 +22,6 @@ class Lockscreen extends Page implements HasForms
 
     protected string $view = 'filament.auth.lockscreen';
 
-    protected static string $layout = 'filament-panels::components.layout.simple';
-
     protected static ?string $slug = 'lockscreen';
 
     public ?array $data = [];
@@ -119,6 +117,7 @@ class Lockscreen extends Page implements HasForms
         // Buka kunci sesi & perbarui waktu aktivitas
         session()->forget(['is_locked', 'locked_at']);
         session(['last_activity_time' => time()]);
+        session()->save();
 
         Notification::make()
             ->title('Sesi Dibuka')
