@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages\Auth;
 
-use App\Models\Pengaturan;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use DanHarrin\LivewireRateLimiting\WithRateLimiting;
 use Filament\Facades\Filament;
@@ -47,20 +46,8 @@ class Lockscreen extends Page implements HasForms
     public function mount(): void
     {
         if (! Filament::auth()->check()) {
-            session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'url.intended']);
+            session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'lock_intended_url']);
             $this->redirect(Filament::getLoginUrl(), navigate: false);
-
-            return;
-        }
-
-        $timeoutMinutes = Pengaturan::getLockTimeoutMinutes();
-        $timeoutSeconds = ($timeoutMinutes > 0 ? $timeoutMinutes : 5) * 60;
-
-        $lockedAt = session('locked_at');
-
-        // Jika waktu di lockscreen sudah melebihi 5 menit tanpa input password, otomatis logout penuh
-        if ($lockedAt && (time() - $lockedAt > $timeoutSeconds)) {
-            $this->logout();
 
             return;
         }
@@ -70,35 +57,9 @@ class Lockscreen extends Page implements HasForms
                 'is_locked' => true,
                 'locked_at' => time(),
             ]);
-        } elseif (! session('locked_at')) {
-            session(['locked_at' => time()]);
         }
 
         $this->form->fill();
-    }
-
-    public function getRemainingSeconds(): int
-    {
-        $timeoutMinutes = Pengaturan::getLockTimeoutMinutes();
-        $timeoutSeconds = ($timeoutMinutes > 0 ? $timeoutMinutes : 5) * 60;
-
-        $lockedAt = session('locked_at', time());
-        $elapsed = time() - $lockedAt;
-        $remaining = $timeoutSeconds - $elapsed;
-
-        return max(0, $remaining);
-    }
-
-    public function checkTimeout(): void
-    {
-        $timeoutMinutes = Pengaturan::getLockTimeoutMinutes();
-        $timeoutSeconds = ($timeoutMinutes > 0 ? $timeoutMinutes : 5) * 60;
-
-        $lockedAt = session('locked_at');
-
-        if ($lockedAt && (time() - $lockedAt >= $timeoutSeconds)) {
-            $this->logout();
-        }
     }
 
     public function getTitle(): string | Htmlable
@@ -133,17 +94,6 @@ class Lockscreen extends Page implements HasForms
 
     public function authenticate(): void
     {
-        // Cek jika batas waktu sesi telah habis saat mencoba submit
-        $timeoutMinutes = Pengaturan::getLockTimeoutMinutes();
-        $timeoutSeconds = ($timeoutMinutes > 0 ? $timeoutMinutes : 5) * 60;
-        $lockedAt = session('locked_at');
-
-        if ($lockedAt && (time() - $lockedAt > $timeoutSeconds)) {
-            $this->logout();
-
-            return;
-        }
-
         try {
             $this->rateLimit(5);
         } catch (TooManyRequestsException $exception) {
@@ -166,10 +116,8 @@ class Lockscreen extends Page implements HasForms
             ]);
         }
 
-        // Re-otentikasi dan perbarui sesi user agar selalu aktif
-        Filament::auth()->login($user, remember: true);
-        session()->regenerate();
-        session()->forget(['is_locked', 'locked_at', 'url.intended']);
+        // Buka kunci sesi & perbarui waktu aktivitas
+        session()->forget(['is_locked', 'locked_at']);
         session(['last_activity_time' => time()]);
 
         Notification::make()
@@ -178,12 +126,14 @@ class Lockscreen extends Page implements HasForms
             ->success()
             ->send();
 
-        $this->redirect(route('filament.admin.pages.dashboard'));
+        $intendedUrl = session()->pull('lock_intended_url', route('filament.admin.pages.dashboard'));
+
+        $this->redirect($intendedUrl);
     }
 
     public function logout(): void
     {
-        session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'url.intended']);
+        session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'lock_intended_url']);
         Filament::auth()->logout();
         session()->invalidate();
         session()->regenerateToken();

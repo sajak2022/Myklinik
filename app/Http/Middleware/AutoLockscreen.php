@@ -15,8 +15,9 @@ class AutoLockscreen
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Jika tidak sedang login, bersihkan session flag lockscreen
         if (! Filament::auth()->check()) {
-            session()->forget(['is_locked', 'locked_at', 'last_activity_time']);
+            session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'lock_intended_url']);
 
             return $next($request);
         }
@@ -24,27 +25,13 @@ class AutoLockscreen
         $timeoutMinutes = Pengaturan::getLockTimeoutMinutes();
         $timeoutSeconds = ($timeoutMinutes > 0 ? $timeoutMinutes : 5) * 60;
 
+        $isLockscreenRoute = $request->route()?->getName() === 'filament.admin.pages.lockscreen' 
+            || $request->is('admin/lockscreen*');
+
         // 1. Jika sesi dalam status terkunci
         if (session('is_locked') === true) {
-            $lockedAt = session('locked_at');
-
-            // JIKA SUDAH MELEBIHI BATAS WAKTU (5 menit) TANPA INPUT PASSWORD:
-            // Otomatis logout penuh dan arahkan ke halaman login (tanpa perlu input password sesi lagi)
-            if ($lockedAt && (time() - $lockedAt > $timeoutSeconds)) {
-                Filament::auth()->logout();
-                session()->forget(['is_locked', 'locked_at', 'last_activity_time', 'url.intended']);
-                session()->invalidate();
-                session()->regenerateToken();
-
-                if ($request->expectsJson() || $request->header('X-Livewire')) {
-                    return response()->json(['redirect' => Filament::getLoginUrl()], 401);
-                }
-
-                return redirect()->to(Filament::getLoginUrl());
-            }
-
-            // Jika mengakses rute lockscreen atau request Livewire lockscreen
-            if ($request->route()?->getName() === 'filament.admin.pages.lockscreen' || $request->is('admin/lockscreen*')) {
+            // Izinkan akses ke halaman lockscreen dan request Livewire lockscreen
+            if ($isLockscreenRoute) {
                 return $next($request);
             }
 
@@ -59,6 +46,11 @@ class AutoLockscreen
 
             if ($request->expectsJson()) {
                 return response()->json(['redirect' => route('filament.admin.pages.lockscreen')], 423);
+            }
+
+            // Simpan intended URL agar setelah unlock bisa kembali ke halaman sebelumnya
+            if (! $request->is('admin/login*') && ! $request->is('admin/logout*')) {
+                session(['lock_intended_url' => $request->fullUrl()]);
             }
 
             return redirect()->route('filament.admin.pages.lockscreen');
@@ -83,6 +75,7 @@ class AutoLockscreen
             session([
                 'is_locked' => true,
                 'locked_at' => time(),
+                'lock_intended_url' => $request->fullUrl(),
             ]);
 
             if ($request->expectsJson() || $request->header('X-Livewire')) {

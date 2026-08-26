@@ -99,38 +99,4 @@
             </div>
         </form>
     </div>
-
-    {{-- Script Auto-Logout Background Timer --}}
-    <script>
-        (function() {
-            let remainingSeconds = {{ $this->getRemainingSeconds() }};
-            let countdownInterval = null;
-
-            function startTimer() {
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                }
-
-                countdownInterval = setInterval(function () {
-                    remainingSeconds--;
-
-                    if (remainingSeconds <= 0) {
-                        clearInterval(countdownInterval);
-                        if (window.Livewire) {
-                            @this.call('logout');
-                        } else {
-                            window.location.href = "{{ filament()->getLoginUrl() }}";
-                        }
-                    }
-                }, 1000);
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', startTimer);
-            } else {
-                startTimer();
-            }
-            document.addEventListener('livewire:navigated', startTimer);
-        })();
-    </script>
 </x-filament-panels::page.simple>
