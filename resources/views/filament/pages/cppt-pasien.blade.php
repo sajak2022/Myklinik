@@ -1,6 +1,5 @@
 <x-filament-panels::page>
     <style>
-        /* Khusus Layar Desktop (>= 1024px): Header & Menu Samping Tetap Menempel di Kiri */
         @media (min-width: 1024px) {
             .fi-page-has-sub-navigation .fi-header {
                 position: sticky !important;
@@ -24,25 +23,6 @@
                 width: 16rem !important;
                 margin-top: 0 !important;
                 padding-top: 0 !important;
-            }
-        }
-
-        /* Pada Layar Mobile (< 1024px): Layout Natural Responsif Tanpa Menimpa Sidebar */
-        @media (max-width: 1023.98px) {
-            .fi-page-has-sub-navigation .fi-header {
-                position: static !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                z-index: auto !important;
-            }
-
-            .fi-page-sub-navigation-sidebar-ctn {
-                position: static !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                z-index: auto !important;
-                max-height: none !important;
-                overflow-y: visible !important;
             }
         }
 
@@ -133,13 +113,12 @@
         }
     </style>
 
+    <div
+        x-on:trigger-selesaikan-pelayanan.window="$wire.triggerSelesaikanPelayanan()"
+        x-on:trigger-batalkan-final.window="$wire.triggerBatalkanFinal()"
+        x-on:trigger-batalkan-pendaftaran.window="$wire.triggerBatalkanPendaftaran()"
+    >
     @if ($pendaftaran)
-        {{-- Navbar Khusus Detail Kunjungan --}}
-        @include('filament.clusters.detail-kunjungan.components.detail-kunjungan-navbar', [
-            'pendaftaran' => $pendaftaran,
-            'activeTab' => 'cppt',
-        ])
-
         {{-- Unified Patient Header Component --}}
         @include('filament.clusters.detail-kunjungan.components.patient-header', [
             'pendaftaran' => $pendaftaran,
@@ -251,10 +230,14 @@
                                             {{ $cppt->tanggal_waktu ? $cppt->tanggal_waktu->format('d-m-Y H:i:s') : '-' }}
                                         </div>
                                         <div class="text-white/80">ID: {{ $cppt->id }}</div>
+                                        @php
+                                            $isVerified = $cppt->is_verified || in_array($pendaftaran->status_pelayanan, [\App\Models\Pendaftaran::STATUS_FINAL, 'Selesai']);
+                                            $verifierName = $cppt->verifiedBy?->nama_lengkap ?? $pendaftaran->dokter?->nama_lengkap ?? 'Dokter DPJP';
+                                        @endphp
                                         <div
-                                            class="font-semibold {{ $cppt->is_verified ? 'text-amber-200' : 'text-white' }}">
+                                            class="font-semibold {{ $isVerified ? 'text-amber-200' : 'text-white' }}">
                                             Verifikasi:
-                                            {{ $cppt->is_verified ? 'Sudah Diverifikasi (' . ($cppt->verifiedBy?->nama_lengkap ?? 'Dokter DPJP') . ')' : 'Belum diverifikasi' }}
+                                            {{ $isVerified ? 'Sudah Diverifikasi (' . $verifierName . ')' : 'Belum diverifikasi' }}
                                         </div>
                                     </div>
                                 </div>
@@ -327,4 +310,7 @@
             </div>
         </div>
     @endif
+    </div>
+
+    <x-filament-actions::modals />
 </x-filament-panels::page>

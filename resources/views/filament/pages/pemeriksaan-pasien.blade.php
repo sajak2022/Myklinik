@@ -1,6 +1,5 @@
 <x-filament-panels::page>
     <style>
-        /* Khusus Layar Desktop (>= 1024px): Header & Menu Samping Tetap Menempel di Kiri */
         @media (min-width: 1024px) {
             .fi-page-has-sub-navigation .fi-header {
                 position: sticky !important;
@@ -26,34 +25,14 @@
                 padding-top: 0 !important;
             }
         }
-
-        /* Pada Layar Mobile (< 1024px): Layout Natural Responsif Tanpa Menimpa Sidebar */
-        @media (max-width: 1023.98px) {
-            .fi-page-has-sub-navigation .fi-header {
-                position: static !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                z-index: auto !important;
-            }
-
-            .fi-page-sub-navigation-sidebar-ctn {
-                position: static !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                z-index: auto !important;
-                max-height: none !important;
-                overflow-y: visible !important;
-            }
-        }
     </style>
 
+    <div
+        x-on:trigger-selesaikan-pelayanan.window="$wire.triggerSelesaikanPelayanan()"
+        x-on:trigger-batalkan-final.window="$wire.triggerBatalkanFinal()"
+        x-on:trigger-batalkan-pendaftaran.window="$wire.triggerBatalkanPendaftaran()"
+    >
     @if ($pendaftaran)
-        {{-- Navbar Khusus Detail Kunjungan --}}
-        @include('filament.clusters.detail-kunjungan.components.detail-kunjungan-navbar', [
-            'pendaftaran' => $pendaftaran,
-            'activeTab' => 'pemeriksaan',
-        ])
-
         {{-- Unified Patient Header Component --}}
         @include('filament.clusters.detail-kunjungan.components.patient-header', ['pendaftaran' => $pendaftaran])
 
@@ -154,4 +133,7 @@
             </div>
         </div>
     @endif
+    </div>
+
+    <x-filament-actions::modals />
 </x-filament-panels::page>

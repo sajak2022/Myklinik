@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -79,7 +80,8 @@ class Pendaftaran extends Model
     public const STATUS_PEMERIKSAAN_PERAWAT = 'Pemeriksaan Perawat';
     public const STATUS_MENUNGGU_DOKTER = 'Menunggu Dokter';
     public const STATUS_SEDANG_DIPERIKSA = 'Sedang Diperiksa';
-    public const STATUS_SELESAI = 'Selesai';
+    public const STATUS_FINAL = 'Final';
+    public const STATUS_SELESAI = 'Final';
     public const STATUS_BATAL = 'Batal';
 
     public const ACTIVE_STATUSES = [
@@ -207,7 +209,7 @@ class Pendaftaran extends Model
             self::STATUS_PEMERIKSAAN_PERAWAT => 'Pemeriksaan Perawat',
             self::STATUS_MENUNGGU_DOKTER     => 'Menunggu Dokter',
             self::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
-            self::STATUS_SELESAI             => 'Pelayanan Selesai',
+            self::STATUS_FINAL, 'Selesai'    => 'Final',
             self::STATUS_BATAL               => 'Dibatalkan',
             default                          => (string) $this->status_pelayanan,
         };
@@ -220,24 +222,26 @@ class Pendaftaran extends Model
             self::STATUS_PEMERIKSAAN_PERAWAT => '#3b82f6', // blue
             self::STATUS_MENUNGGU_DOKTER     => '#8b5cf6', // purple
             self::STATUS_SEDANG_DIPERIKSA    => '#06b6d4', // cyan
-            self::STATUS_SELESAI             => '#10b981', // emerald
+            self::STATUS_FINAL, 'Selesai'    => '#10b981', // emerald
             self::STATUS_BATAL               => '#ef4444', // red
             default                          => '#94a3b8',
         };
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status_pelayanan', self::ACTIVE_STATUSES);
     }
 
-    public function scopeUntukDokter($query, ?int $poliId = null, ?int $dokterId = null)
+    public function scopeUntukDokter(Builder $query, ?int $poliId = null, ?int $dokterId = null): Builder
     {
-        // Dokter HANYA melihat pasien setelah perawat selesai mengisi pemeriksaan & CPPT (Menunggu Dokter, Sedang Diperiksa, Selesai)
+        // Dokter melihat pasien yang sudah diterima/sedang diperiksa hingga Final/Batal
         $query->whereIn('status_pelayanan', [
-            self::STATUS_MENUNGGU_DOKTER,
             self::STATUS_SEDANG_DIPERIKSA,
-            self::STATUS_SELESAI,
+            self::STATUS_FINAL,
+            'Selesai',
+            self::STATUS_BATAL,
+            'Batal',
         ]);
 
         if ($poliId) {
@@ -254,15 +258,17 @@ class Pendaftaran extends Model
         return $query;
     }
 
-    public function scopeUntukPerawat($query, ?int $poliId = null)
+    public function scopeUntukPerawat(Builder $query, ?int $poliId = null): Builder
     {
-        // Perawat melihat dari awal pendaftaran (Menunggu) hingga Selesai untuk poli terkait
+        // Perawat melihat pasien yang sudah diterima (Pemeriksaan Perawat hingga Final/Batal) untuk poli terkait
         $query->whereIn('status_pelayanan', [
-            self::STATUS_MENUNGGU,
             self::STATUS_PEMERIKSAAN_PERAWAT,
             self::STATUS_MENUNGGU_DOKTER,
             self::STATUS_SEDANG_DIPERIKSA,
-            self::STATUS_SELESAI,
+            self::STATUS_FINAL,
+            'Selesai',
+            self::STATUS_BATAL,
+            'Batal',
         ]);
 
         if ($poliId) {
@@ -302,8 +308,36 @@ class Pendaftaran extends Model
         return $this->hasMany(PemeriksaanFisik::class, 'pendaftaran_id')->latest('waktu_pemeriksaan');
     }
 
+
+
     public function asuhanKeperawatans(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(AsuhanKeperawatan::class, 'pendaftaran_id')->latest('waktu_input');
+    }
+
+    public function finalkanPelayanan(?int $verifiedByPegawaiId = null): void
+    {
+        $this->update(['status_pelayanan' => self::STATUS_FINAL]);
+
+        /** @var User|null $currentUser */
+        $currentUser = Auth::user();
+        $pegawaiId = $verifiedByPegawaiId ?? $this->dokter_id ?? $currentUser?->pegawai_id;
+
+        $this->cpptRecords()->where('is_verified', false)->update([
+            'is_verified' => true,
+            'verified_by_pegawai_id' => $pegawaiId,
+            'verified_at' => now(),
+        ]);
+    }
+
+    public function selesaikanPelayanan(?int $verifiedByPegawaiId = null): void
+    {
+        $this->finalkanPelayanan($verifiedByPegawaiId);
+    }
+
+    public function batalkanFinalPelayanan(): void
+    {
+        $newStatus = $this->dokter_id ? self::STATUS_SEDANG_DIPERIKSA : self::STATUS_MENUNGGU_DOKTER;
+        $this->update(['status_pelayanan' => $newStatus]);
     }
 }

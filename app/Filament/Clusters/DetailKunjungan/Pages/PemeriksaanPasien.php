@@ -53,10 +53,157 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
     public ?Pendaftaran $pendaftaran = null;
     public ?array $data = [];
 
+    protected function getHeaderActions(): array
+    {
+        return [];
+    }
+
+    protected function getActions(): array
+    {
+        return [
+            $this->selesaikanPelayananAction(),
+            $this->batalkanFinalAction(),
+            $this->batalkanPendaftaranAction(),
+            $this->teruskanKeDokterAction(),
+        ];
+    }
+
     #[On('trigger-batalkan-pendaftaran')]
     public function triggerBatalkanPendaftaran(): void
     {
         $this->mountAction('batalkanPendaftaran');
+    }
+
+    #[On('trigger-selesaikan-pelayanan')]
+    public function triggerSelesaikanPelayanan(): void
+    {
+        if (! $this->pendaftaran && $this->record) {
+            $this->pendaftaran = Pendaftaran::find($this->record);
+        }
+
+        if (! $this->pendaftaran) {
+            Notification::make()
+                ->title('Tidak Ada Pasien')
+                ->body('Tidak ada data kunjungan pasien aktif yang dipilih.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        if (in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_FINAL, 'Selesai'])) {
+            Notification::make()
+                ->title('Peringatan: Pelayanan Sudah Final')
+                ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} ({$this->pendaftaran->no_pendaftaran}) sudah berstatus Final.")
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $this->mountAction('selesaikanPelayanan');
+    }
+
+    #[On('trigger-batalkan-final')]
+    public function triggerBatalkanFinal(): void
+    {
+        if (! $this->pendaftaran && $this->record) {
+            $this->pendaftaran = Pendaftaran::find($this->record);
+        }
+
+        if (! $this->pendaftaran) {
+            Notification::make()
+                ->title('Tidak Ada Pasien')
+                ->body('Tidak ada data kunjungan pasien aktif yang dipilih.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        if (! in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_FINAL, 'Selesai'])) {
+            Notification::make()
+                ->title('Pasien Belum Final')
+                ->body("Pelayanan pasien {$this->pendaftaran->pasien?->nama} belum berstatus Final (Status saat ini: {$this->pendaftaran->status_pelayanan}).")
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $this->mountAction('batalkanFinal');
+    }
+
+    public function selesaikanPelayananAction(): Action
+    {
+        return Action::make('selesaikanPelayanan')
+            ->label('Selesaikan Pelayanan')
+            ->icon('heroicon-m-check-badge')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalIcon('heroicon-o-check-circle')
+            ->modalHeading('Selesaikan Pelayanan Pasien (Final)?')
+            ->modalDescription(fn () => "Apakah Anda yakin ingin menyelesaikan pelayanan untuk pasien {$this->pendaftaran?->pasien?->nama} ({$this->pendaftaran?->no_pendaftaran})? Status kunjungan akan berubah menjadi Final.")
+            ->modalSubmitActionLabel('Ya, Selesaikan')
+            ->action(function () {
+                if (! $this->pendaftaran && $this->record) {
+                    $this->pendaftaran = Pendaftaran::find($this->record);
+                }
+
+                if (! $this->pendaftaran) {
+                    return;
+                }
+
+                if (in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_FINAL, 'Selesai'])) {
+                    Notification::make()
+                        ->title('Peringatan: Pelayanan Sudah Final')
+                        ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} ({$this->pendaftaran->no_pendaftaran}) sudah berstatus Final.")
+                        ->warning()
+                        ->send();
+                    return;
+                }
+
+                $this->pendaftaran->finalkanPelayanan();
+                session()->forget('active_pendaftaran_id');
+
+                Notification::make()
+                    ->title('Pelayanan Final')
+                    ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} telah berhasil difinalkan.")
+                    ->success()
+                    ->send();
+
+                $this->redirect(\App\Filament\Pages\KunjunganPasien::getUrl());
+            });
+    }
+
+    public function batalkanFinalAction(): Action
+    {
+        return Action::make('batalkanFinal')
+            ->label('Batalkan Final')
+            ->icon('heroicon-m-arrow-uturn-left')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->modalHeading('Batalkan Status Final Pasien?')
+            ->modalDescription(fn () => "Status pelayanan pasien {$this->pendaftaran?->pasien?->nama} saat ini adalah Final. Apakah Anda yakin ingin membatalkan status Final dan mengembalikannya ke status pemeriksaan aktif (Sedang Diperiksa)?")
+            ->modalSubmitActionLabel('Ya, Batalkan Final')
+            ->action(function () {
+                if (! $this->pendaftaran && $this->record) {
+                    $this->pendaftaran = Pendaftaran::find($this->record);
+                }
+
+                if (! $this->pendaftaran) {
+                    return;
+                }
+
+                $this->pendaftaran->batalkanFinalPelayanan();
+                session(['active_pendaftaran_id' => $this->pendaftaran->id]);
+
+                Notification::make()
+                    ->title('Status Final Dibatalkan')
+                    ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} telah dikembalikan ke status pemeriksaan aktif (Sedang Diperiksa).")
+                    ->warning()
+                    ->send();
+
+                $this->pendaftaran->refresh();
+                $this->redirect(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $this->pendaftaran->id]));
+            });
     }
 
     public function batalkanPendaftaranAction(): Action
@@ -131,6 +278,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
 
     private function isDokterOrAdmin(): bool
     {
+        /** @var User|null $user */
         $user = Auth::user();
 
         return (bool) ($user && (
@@ -138,6 +286,10 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
             || $user->pegawai?->profesi === 'Dokter'
         ));
     }
+
+
+
+
 
     public static function getNavigationUrl(array $parameters = []): string
     {
@@ -147,7 +299,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
             return static::getUrl(['record' => $recordId]);
         }
 
-        return parent::getNavigationUrl($parameters);
+        return parent::getNavigationUrl();
     }
 
     public function mount($record = null): void
@@ -158,7 +310,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
         $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
         $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
 
-        $recordId = $record ?: request()->query('record') ?: session('active_pendaftaran_id');
+        $recordId = $record ?: request()->route('record') ?: request()->query('record') ?: session('active_pendaftaran_id');
 
         if ($recordId) {
             $this->record = (int) $recordId;
@@ -174,15 +326,15 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
             }
         }
 
-        // Jika belum ada record di URL/session, cari pendaftaran aktif untuk hari ini
+        // Jika belum ada record di URL/session, cari pendaftaran aktif terakhir
         if (! $this->pendaftaran) {
             $queryActive = Pendaftaran::query()
                 ->with([
                     'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
                     'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
                 ])
-                ->whereDate('tanggal_pendaftaran', today())
-                ->latest('tanggal_pendaftaran');
+                ->latest('tanggal_pendaftaran')
+                ->latest('id');
 
             $pegawai = $user?->pegawai;
             if ($pegawai && $pegawai->poli_id && ! $user->hasRole('super_admin')) {
@@ -200,6 +352,14 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                 $this->pendaftaran = $queryActive->first();
             } else {
                 $this->pendaftaran = $queryActive->first();
+            }
+
+            // Jika masih belum ada, ambil data pendaftaran terakhir apapun statusnya agar form tetap tampil
+            if (! $this->pendaftaran) {
+                $this->pendaftaran = Pendaftaran::with([
+                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
+                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
+                ])->latest('id')->first();
             }
 
             if ($this->pendaftaran) {
@@ -400,13 +560,12 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->extraInputAttributes(['class' => 'font-bold text-center']),
                     ]),
 
-                Section::make('Catatan Tambahan')
-                    ->icon('heroicon-o-pencil-square')
+                Section::make()
                     ->columnSpanFull()
                     ->schema([
                         Textarea::make('catatan_tambahan')
-                            ->label('')
-                            ->rows(3)
+                            ->hiddenLabel()
+                            ->rows(4)
                             ->placeholder('Catatan khusus kondisi pasien / keluhan fisik tambahan'),
                     ]),
             ]);
@@ -499,17 +658,17 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
             })
             ->heading('Riwayat Pemeriksaan Fisik Kunjungan Ini')
             ->columns([
+                TextColumn::make('waktu_pemeriksaan')
+                    ->label('Waktu')
+                    ->dateTime('d/m/Y H:i')
+                    ->weight('medium')
+                    ->description(fn (PemeriksaanFisik $record) => $record->alat_bantu_nafas ? 'O2 Bantu: Ya' : null),
+
                 TextColumn::make('keadaan_umum')
-                    ->label('Keadaan Umum')
-                    ->weight('medium'),
-
-                TextColumn::make('tingkat_kesadaran')
-                    ->label('Tingkat Kesadaran'),
-
-                TextColumn::make('gcs_total')
-                    ->label('GCS')
-                    ->weight('bold')
-                    ->alignCenter(),
+                    ->label('Keadaan / Kesadaran')
+                    ->weight('medium')
+                    ->description(fn (PemeriksaanFisik $record) => "{$record->tingkat_kesadaran} (GCS: {$record->gcs_total})")
+                    ->wrap(),
 
                 TextColumn::make('tekanan_darah')
                     ->label('Tekanan Darah')
@@ -517,28 +676,15 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                     ->alignCenter(),
 
                 TextColumn::make('frekuensi_nadi')
-                    ->label('Nadi')
-                    ->formatStateUsing(fn ($state) => "{$state} x/m")
-                    ->alignCenter(),
-
-                TextColumn::make('frekuensi_nafas')
-                    ->label('Nafas')
-                    ->formatStateUsing(fn ($state) => "{$state} x/m")
+                    ->label('Nadi / Nafas')
+                    ->getStateUsing(fn (PemeriksaanFisik $record) => "{$record->frekuensi_nadi} x/m")
+                    ->description(fn (PemeriksaanFisik $record) => "Nafas: {$record->frekuensi_nafas} x/m")
                     ->alignCenter(),
 
                 TextColumn::make('suhu')
-                    ->label('Suhu')
-                    ->formatStateUsing(fn ($state) => "{$state} °C")
-                    ->alignCenter(),
-
-                TextColumn::make('saturasi_o2')
-                    ->label('SpO2')
-                    ->formatStateUsing(fn ($state) => "{$state}%")
-                    ->alignCenter(),
-
-                TextColumn::make('alat_bantu_nafas')
-                    ->label('Alat Bantu')
-                    ->formatStateUsing(fn ($state) => $state ? 'Ya' : 'Tidak')
+                    ->label('Suhu / SpO2')
+                    ->getStateUsing(fn (PemeriksaanFisik $record) => "{$record->suhu} °C")
+                    ->description(fn (PemeriksaanFisik $record) => "SpO2: {$record->saturasi_o2}%")
                     ->alignCenter(),
 
                 TextColumn::make('skor_ewss')
@@ -552,13 +698,11 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                     })
                     ->formatStateUsing(fn (PemeriksaanFisik $record) => "{$record->skor_ewss} ({$record->kategori_ewss})")
                     ->alignCenter(),
-
-                TextColumn::make('waktu_pemeriksaan')
-                    ->label('Waktu')
-                    ->dateTime('d/m/Y H:i'),
             ])
             ->actions([
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->iconButton()
+                    ->tooltip('Hapus Pemeriksaan'),
             ]);
     }
 

@@ -139,7 +139,7 @@ class PendaftaranInfolist
                                 Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'Sedang Dilayani Perawat',
                                 Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'Siap Diperiksa Dokter',
                                 Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
-                                Pendaftaran::STATUS_SELESAI             => 'Pelayanan Selesai',
+                                Pendaftaran::STATUS_FINAL               => 'Final',
                                 Pendaftaran::STATUS_BATAL               => 'Dibatalkan',
                                 default                                 => $state,
                             })
@@ -148,7 +148,7 @@ class PendaftaranInfolist
                                 'info'    => Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
                                 'primary' => Pendaftaran::STATUS_MENUNGGU_DOKTER,
                                 'cyan'    => Pendaftaran::STATUS_SEDANG_DIPERIKSA,
-                                'success' => Pendaftaran::STATUS_SELESAI,
+                                'success' => Pendaftaran::STATUS_FINAL,
                                 'danger'  => Pendaftaran::STATUS_BATAL,
                             ]),
 

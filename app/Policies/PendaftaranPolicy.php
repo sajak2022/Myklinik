@@ -11,15 +11,19 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class PendaftaranPolicy
 {
     use HandlesAuthorization;
-    
+
     public function viewAny(AuthUser $authUser): bool
     {
-        return $authUser->can('ViewAny:Pendaftaran');
+        return $authUser->can('ViewAny:Pendaftaran')
+            || $authUser->hasRole(['super_admin', 'Admin', 'Dokter', 'Perawat', 'Bidan'])
+            || ($authUser->pegawai && in_array($authUser->pegawai->profesi, ['Dokter', 'Perawat', 'Bidan']));
     }
 
     public function view(AuthUser $authUser, Pendaftaran $pendaftaran): bool
     {
-        return $authUser->can('View:Pendaftaran');
+        return $authUser->can('View:Pendaftaran')
+            || $authUser->hasRole(['super_admin', 'Admin', 'Dokter', 'Perawat', 'Bidan'])
+            || ($authUser->pegawai && in_array($authUser->pegawai->profesi, ['Dokter', 'Perawat', 'Bidan']));
     }
 
     public function create(AuthUser $authUser): bool

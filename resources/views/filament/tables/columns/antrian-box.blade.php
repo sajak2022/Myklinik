@@ -1,6 +1,15 @@
 @php
     $record = $getRecord();
-    $isFinished = in_array($record->status_pelayanan, ['Selesai', 'Batal']);
+    $status = $record->status_pelayanan;
+    $isFinished = in_array($status, [
+        \App\Models\Pendaftaran::STATUS_FINAL,
+        'Final',
+        'Selesai',
+        'Pelayanan Selesai',
+        \App\Models\Pendaftaran::STATUS_BATAL,
+        'Batal',
+        'Pendaftaran Dibatalkan',
+    ]);
 @endphp
 
 <div style="display: flex; align-items: center; justify-content: center; width: 100%; text-align: center; padding: 4px 0;">
@@ -9,6 +18,6 @@
             {{ $record->no_antrian }}
         </div>
     @else
-        <span class="text-gray-400 font-semibold text-sm">-</span>
+        <span class="text-gray-400 dark:text-gray-600 font-bold text-sm">-</span>
     @endif
 </div>

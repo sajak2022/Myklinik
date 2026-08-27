@@ -39,6 +39,17 @@ class ViewPasien extends ViewRecord
 
     protected function getHeaderActions(): array
     {
+        /** @var \App\Models\User|null $user */
+        $user = auth()->user();
+        $isDokterOrPerawat = $user && (
+            $user->hasRole(['Dokter', 'Perawat', 'Bidan']) ||
+            ($user->pegawai && in_array($user->pegawai->profesi, ['Dokter', 'Perawat', 'Bidan']))
+        );
+
+        if ($isDokterOrPerawat) {
+            return [];
+        }
+
         $hasActive = \App\Models\Pendaftaran::where('pasien_id', $this->record->id)
             ->whereIn('status_pelayanan', \App\Models\Pendaftaran::ACTIVE_STATUSES)
             ->exists();

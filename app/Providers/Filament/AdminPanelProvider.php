@@ -80,12 +80,12 @@ class AdminPanelProvider extends PanelProvider
                 fn() => view('filament.components.auth-styles')
             )
             ->renderHook(
-                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
-                fn() => view('filament.components.topbar-selesaikan-pelayanan')
+                PanelsRenderHook::GLOBAL_SEARCH_AFTER,
+                fn() => view('filament.components.navbar-create-pasien')
             )
             ->renderHook(
-                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
-                fn() => view('filament.components.navbar-create-pasien')
+                PanelsRenderHook::GLOBAL_SEARCH_AFTER,
+                fn() => view('filament.components.topbar-selesaikan-pelayanan')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,

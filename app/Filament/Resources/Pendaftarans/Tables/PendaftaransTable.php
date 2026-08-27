@@ -16,11 +16,26 @@ class PendaftaransTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->whereDate('tanggal_pendaftaran', today())
-                ->where('status_pelayanan', '!=', Pendaftaran::STATUS_SELESAI)
-                ->with(['pasien', 'poli', 'dokter']))
+            ->modifyQueryUsing(function (Builder $query) {
+                /** @var User|null $user */
+                $user = Auth::user();
+                $pegawai = $user?->pegawai;
+                $poliId = $pegawai?->poli_id;
+
+                $query->with(['pasien.tempatLahir', 'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'])
+                    ->latest('tanggal_pendaftaran')
+                    ->latest('id');
+
+                if ($poliId && ! $user?->hasRole('super_admin')) {
+                    $query->where('poli_id', $poliId);
+                }
+
+                return $query;
+            })
             ->searchPlaceholder('Cari No. RM / Nama Pasien / No. Registrasi...')
             ->searchDebounce('400ms')
+            ->poll('5s')
+            ->recordUrl(null)
             ->columns([
                 ViewColumn::make('kunjungan')
                     ->label('Pengunjung')
@@ -50,12 +65,61 @@ class PendaftaransTable
                     ->alignment(Alignment::Center),
             ])
             ->defaultSort('tanggal_pendaftaran', 'desc')
-            ->recordUrl(null)
             ->filters([
-                //
+                // Filter Periode Tanggal (Default: Hari Ini)
+                \Filament\Tables\Filters\SelectFilter::make('periode')
+                    ->label('Periode Waktu')
+                    ->placeholder('Hari Ini')
+                    ->options([
+                        'semua'      => 'Semua Periode',
+                        'minggu_ini' => 'Minggu Ini',
+                        'bulan_ini'  => 'Bulan Ini',
+                        'tahun_ini'  => 'Tahun Ini',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'semua'      => $query,
+                            'minggu_ini' => $query->whereBetween('tanggal_pendaftaran', [now()->startOfWeek(), now()->endOfWeek()]),
+                            'bulan_ini'  => $query->whereMonth('tanggal_pendaftaran', now()->month)->whereYear('tanggal_pendaftaran', now()->year),
+                            'tahun_ini'  => $query->whereYear('tanggal_pendaftaran', now()->year),
+                            default      => $query->whereDate('tanggal_pendaftaran', today()),
+                        };
+                    }),
+
+                \Filament\Tables\Filters\SelectFilter::make('status_pelayanan')
+                    ->label('Status Pelayanan')
+                    ->placeholder('Antrian Aktif / Sedang Dilayani')
+                    ->options([
+                        'semua'           => 'Semua Status',
+                        'sedang_dilayani' => 'Antrian Aktif / Sedang Dilayani',
+                        'selesai'         => 'Selesai',
+                        'batal'           => 'Batal Kunjungan',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === 'semua') {
+                            return $query;
+                        }
+
+                        if ($value === 'batal') {
+                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_BATAL, 'Batal']);
+                        }
+
+                        if ($value === 'selesai') {
+                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_FINAL, 'Selesai']);
+                        }
+
+                        return $query->whereIn('status_pelayanan', [
+                            Pendaftaran::STATUS_MENUNGGU,
+                            Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                            Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                            Pendaftaran::STATUS_SEDANG_DIPERIKSA,
+                        ]);
+                    }),
             ])
             ->actions([
-                // 1. Tombol Terima (Perawat) - Saat status Menunggu
+                // 1. Tombol Terima (Perawat & Dokter) - Saat status Menunggu atau Menunggu Dokter
                 Action::make('terima')
                     ->label('Terima')
                     ->button()
@@ -66,67 +130,35 @@ class PendaftaransTable
                         /** @var User|null $user */
                         $user = Auth::user();
                         $isAuthorized = $user && (
-                            $user->hasRole(['super_admin', 'Admin', 'Perawat', 'Bidan']) ||
-                            ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan']))
+                            $user->hasRole(['super_admin', 'Admin', 'Perawat', 'Bidan', 'Dokter']) ||
+                            ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan', 'Dokter']))
                         );
-                        return $isAuthorized && $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU;
+                        return $isAuthorized && in_array($record->status_pelayanan, [
+                            Pendaftaran::STATUS_MENUNGGU,
+                            Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                        ]);
                     })
-                    ->action(function (Pendaftaran $record) {
-                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT]);
+                    ->action(function (Pendaftaran $record, \Livewire\Component $livewire) {
+                        /** @var User|null $user */
+                        $user = Auth::user();
+                        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+                        $nextStatus = ($isDokter || $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU_DOKTER)
+                            ? Pendaftaran::STATUS_SEDANG_DIPERIKSA
+                            : Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT;
+
+                        $record->update(['status_pelayanan' => $nextStatus]);
                         session(['active_pendaftaran_id' => $record->id]);
 
                         \Filament\Notifications\Notification::make()
                             ->title('Pasien Diterima')
-                            ->body("Pasien {$record->pasien?->nama} telah diterima untuk pemeriksaan awal oleh perawat.")
+                            ->body("Pasien {$record->pasien?->nama} telah diterima untuk pemeriksaan.")
                             ->info()
                             ->send();
 
-                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
+                        $livewire->redirect(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
                     }),
 
-                // 2. Tombol Periksa Dokter - Saat status Sedang Diperiksa
-                Action::make('periksa')
-                    ->label('Periksa')
-                    ->button()
-                    ->color('info')
-                    ->size('sm')
-                    ->icon('heroicon-m-arrow-right-circle')
-                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_SEDANG_DIPERIKSA]))
-                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
-
-                // 3. Tombol Selesaikan Pelayanan - Khusus Admin & Dokter
-                Action::make('selesaikan')
-                    ->label('Selesaikan')
-                    ->button()
-                    ->color('success')
-                    ->size('sm')
-                    ->icon('heroicon-m-check-badge')
-                    ->requiresConfirmation()
-                    ->modalHeading('Selesaikan Pelayanan Pasien?')
-                    ->modalDescription('Apakah Anda yakin ingin menyelesaikan proses pelayanan/pemeriksaan untuk pasien ini?')
-                    ->modalSubmitActionLabel('Ya, Selesaikan')
-                    ->visible(function (Pendaftaran $record): bool {
-                        /** @var User|null $user */
-                        $user = Auth::user();
-                        $isAuthorized = $user && (
-                            $user->hasRole(['super_admin', 'Admin', 'Dokter']) ||
-                            ($user->pegawai && in_array($user->pegawai->profesi, ['Dokter']))
-                        );
-
-                        return $isAuthorized && $record->status_pelayanan === Pendaftaran::STATUS_SEDANG_DIPERIKSA;
-                    })
-                    ->action(function (Pendaftaran $record) {
-                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_SELESAI]);
-                        session()->forget('active_pendaftaran_id');
-
-                        \Filament\Notifications\Notification::make()
-                            ->title('Pelayanan Selesai')
-                            ->body("Pelayanan untuk pasien {$record->pasien?->nama} telah berhasil diselesaikan.")
-                            ->success()
-                            ->send();
-                    }),
-
-                // 4. Tombol Batal - Saat status Menunggu atau Pemeriksaan Perawat
+                // 2. Tombol Batal - Saat status Menunggu, Pemeriksaan Perawat, atau Menunggu Dokter
                 Action::make('batal')
                     ->label('Batal')
                     ->button()
@@ -136,7 +168,11 @@ class PendaftaransTable
                     ->requiresConfirmation()
                     ->modalHeading('Batalkan Kunjungan Pengunjung?')
                     ->modalDescription('Apakah Anda yakin ingin membatalkan pendaftaran pengunjung ini?')
-                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, [Pendaftaran::STATUS_MENUNGGU, Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT]))
+                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, [
+                        Pendaftaran::STATUS_MENUNGGU,
+                        Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                        Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                    ]))
                     ->action(function (Pendaftaran $record) {
                         $record->update(['status_pelayanan' => Pendaftaran::STATUS_BATAL]);
                         session()->forget('active_pendaftaran_id');
@@ -145,6 +181,22 @@ class PendaftaransTable
                             ->title('Pendaftaran Dibatalkan')
                             ->warning()
                             ->send();
+                    }),
+
+                // 3. Tombol Lihat - Saat sudah diterima (Pemeriksaan Perawat, Sedang Diperiksa, Final/Selesai, atau Batal)
+                Action::make('lihat')
+                    ->label('Lihat')
+                    ->button()
+                    ->color('gray')
+                    ->size('sm')
+                    ->icon('heroicon-m-eye')
+                    ->visible(fn (Pendaftaran $record): bool => ! in_array($record->status_pelayanan, [
+                        Pendaftaran::STATUS_MENUNGGU,
+                        Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                    ]))
+                    ->action(function (Pendaftaran $record, \Livewire\Component $livewire) {
+                        session(['active_pendaftaran_id' => $record->id]);
+                        $livewire->redirect(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
                     }),
             ]);
     }
