@@ -264,15 +264,16 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                 }
 
                 $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+                $this->pendaftaran->kirimNotifikasiKeDokter();
                 session()->forget('active_pendaftaran_id');
 
                 Notification::make()
                     ->title('Pasien Berhasil Diteruskan ke Dokter')
-                    ->body("Pasien {$this->pendaftaran->pasien?->nama} telah diteruskan ke antrean dokter.")
+                    ->body("Pasien {$this->pendaftaran->pasien?->nama} telah diteruskan ke antrean dokter dan notifikasi telah dikirimkan.")
                     ->success()
                     ->send();
 
-                $this->redirect(\App\Filament\Pages\KunjunganPasien::getUrl());
+                $this->redirect(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index'));
             });
     }
 
@@ -419,7 +420,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                                 'Koma'               => 'Koma',
                             ])
                             ->default('Sadar Baik / Alert')
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         DateTimePicker::make('waktu_pemeriksaan')
@@ -440,7 +441,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->minValue(0)
                             ->maxValue(4)
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, Get $get) {
                                 $set('gcs_total', (int) $get('gcs_eye') + (int) $get('gcs_motorik') + (int) $get('gcs_verbal'));
                                 self::calculateEwss($set, $get);
@@ -452,7 +453,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->minValue(0)
                             ->maxValue(6)
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, Get $get) {
                                 $set('gcs_total', (int) $get('gcs_eye') + (int) $get('gcs_motorik') + (int) $get('gcs_verbal'));
                                 self::calculateEwss($set, $get);
@@ -464,7 +465,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->minValue(0)
                             ->maxValue(5)
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, Get $get) {
                                 $set('gcs_total', (int) $get('gcs_eye') + (int) $get('gcs_motorik') + (int) $get('gcs_verbal'));
                                 self::calculateEwss($set, $get);
@@ -487,7 +488,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->suffix('mmHg')
                             ->numeric()
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('diastolik')
@@ -501,7 +502,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->suffix('x/mnt')
                             ->numeric()
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('frekuensi_nafas')
@@ -509,7 +510,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->suffix('x/mnt')
                             ->numeric()
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('suhu')
@@ -518,7 +519,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->numeric()
                             ->step(0.1)
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         TextInput::make('saturasi_o2')
@@ -526,7 +527,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->suffix('%')
                             ->numeric()
                             ->default(0)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         Select::make('alat_bantu_nafas')
@@ -537,7 +538,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ])
                             ->default('Tidak')
                             ->selectablePlaceholder(false)
-                            ->live()
+                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get))
                             ->columnSpan(2),
                     ]),
@@ -722,30 +723,81 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
         $user = Auth::user();
         $pegawaiId = $user?->pegawai?->id;
 
+        $eye = (int) ($state['gcs_eye'] ?? 0);
+        $motorik = (int) ($state['gcs_motorik'] ?? 0);
+        $verbal = (int) ($state['gcs_verbal'] ?? 0);
+        $gcsTotal = $eye + $motorik + $verbal;
+
+        $skorEwss = 0;
+        $nafas = (int) ($state['frekuensi_nafas'] ?? 0);
+        if ($nafas > 0) {
+            if ($nafas <= 8 || $nafas >= 25) $skorEwss += 3;
+            elseif ($nafas >= 21) $skorEwss += 2;
+            elseif ($nafas <= 11) $skorEwss += 1;
+        }
+        $spo2 = (int) ($state['saturasi_o2'] ?? 0);
+        if ($spo2 > 0) {
+            if ($spo2 <= 91) $skorEwss += 3;
+            elseif ($spo2 <= 93) $skorEwss += 2;
+            elseif ($spo2 <= 95) $skorEwss += 1;
+        }
+        if (($state['alat_bantu_nafas'] ?? 'Tidak') === 'Ya') {
+            $skorEwss += 2;
+        }
+        $suhu = (float) ($state['suhu'] ?? 0);
+        if ($suhu > 0) {
+            if ($suhu <= 35.0) $skorEwss += 3;
+            elseif ($suhu >= 39.1) $skorEwss += 2;
+            elseif ($suhu <= 36.0 || $suhu >= 38.1) $skorEwss += 1;
+        }
+        $sis = (int) ($state['sistolik'] ?? 0);
+        if ($sis > 0) {
+            if ($sis <= 90 || $sis >= 220) $skorEwss += 3;
+            elseif ($sis <= 100) $skorEwss += 2;
+            elseif ($sis <= 110) $skorEwss += 1;
+        }
+        $nadi = (int) ($state['frekuensi_nadi'] ?? 0);
+        if ($nadi > 0) {
+            if ($nadi <= 40 || $nadi >= 131) $skorEwss += 3;
+            elseif ($nadi >= 111) $skorEwss += 2;
+            elseif ($nadi <= 50 || $nadi >= 91) $skorEwss += 1;
+        }
+        $kesadaran = $state['tingkat_kesadaran'] ?? 'Sadar Baik / Alert';
+        if (in_array($kesadaran, ['Voice', 'Pain', 'Unresponsive', 'Apatis', 'Somnolen', 'Sopor', 'Koma'], true)) {
+            $skorEwss += 3;
+        }
+
+        $kategoriEwss = match (true) {
+            $skorEwss === 0 => 'Normal',
+            $skorEwss <= 4  => 'Rendah',
+            $skorEwss <= 6  => 'Sedang',
+            default         => 'Tinggi',
+        };
+
         PemeriksaanFisik::create([
             'pendaftaran_id'    => $this->pendaftaran->id,
             'pasien_id'         => $this->pendaftaran->pasien_id,
             'pegawai_id'        => $pegawaiId,
             'keadaan_umum'      => $state['keadaan_umum'] ?? null,
-            'tingkat_kesadaran' => $state['tingkat_kesadaran'] ?? 'Sadar Baik / Alert',
-            'gcs_eye'           => (int) ($state['gcs_eye'] ?? 0),
-            'gcs_motorik'       => (int) ($state['gcs_motorik'] ?? 0),
-            'gcs_verbal'        => (int) ($state['gcs_verbal'] ?? 0),
-            'gcs_total'         => (int) ($state['gcs_total'] ?? 0),
-            'sistolik'          => (int) ($state['sistolik'] ?? 0),
+            'tingkat_kesadaran' => $kesadaran,
+            'gcs_eye'           => $eye,
+            'gcs_motorik'       => $motorik,
+            'gcs_verbal'        => $verbal,
+            'gcs_total'         => $gcsTotal,
+            'sistolik'          => $sis,
             'diastolik'         => (int) ($state['diastolik'] ?? 0),
-            'frekuensi_nafas'   => (int) ($state['frekuensi_nafas'] ?? 0),
-            'frekuensi_nadi'    => (int) ($state['frekuensi_nadi'] ?? 0),
-            'suhu'              => (float) ($state['suhu'] ?? 0),
-            'saturasi_o2'       => (int) ($state['saturasi_o2'] ?? 0),
+            'frekuensi_nafas'   => $nafas,
+            'frekuensi_nadi'    => $nadi,
+            'suhu'              => $suhu,
+            'saturasi_o2'       => $spo2,
             'alat_bantu_nafas'  => ($state['alat_bantu_nafas'] ?? 'Tidak') === 'Ya',
-            'skor_ewss'         => (int) ($state['skor_ewss'] ?? 0),
-            'kategori_ewss'     => $state['kategori_ewss'] ?? 'Normal',
+            'skor_ewss'         => $skorEwss,
+            'kategori_ewss'     => $kategoriEwss,
             'waktu_pemeriksaan' => $state['waktu_pemeriksaan'] ?? now(),
             'catatan_tambahan'  => $state['catatan_tambahan'] ?? null,
         ]);
 
-        $this->pendaftaran->load('pemeriksaanFisiks');
+        $this->pendaftaran->load('pemeriksaanFisiks', 'cpptRecords');
         $this->teruskanOtomatisJikaLengkap();
 
         $this->form->fill([
@@ -783,6 +835,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
         if ($this->pendaftaran->isSiapUntukDokter()
             && in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU], true)) {
             $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+            $this->pendaftaran->kirimNotifikasiKeDokter();
         }
     }
 

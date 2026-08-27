@@ -18,7 +18,6 @@
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
         "livewire/volt": "^1.11",
-        "moataz-01/filament-notification-sound": "^1.0",
         "nakanakaii/filament-countries": "^1.0",
         "qalainau/bonsai-theme": "^0.1.0"
     },

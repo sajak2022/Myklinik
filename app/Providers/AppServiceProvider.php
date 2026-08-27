@@ -21,8 +21,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if (request()->hasHeader('x-forwarded-proto') || config('app.env') !== 'local') {
+        if (
+            app()->environment('production') ||
+            request()->isSecure() ||
+            request()->header('x-forwarded-proto') === 'https' ||
+            str_contains(request()->header('host') ?? '', 'ngrok') ||
+            str_contains(request()->url(), 'ngrok') ||
+            str_contains(config('app.url'), 'https://')
+        ) {
             URL::forceScheme('https');
+            request()->server->set('HTTPS', 'on');
         }
     }
 }

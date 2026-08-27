@@ -19,6 +19,10 @@ class PendaftaransTable
             ->modifyQueryUsing(function (Builder $query) {
                 /** @var User|null $user */
                 $user = Auth::user();
+                $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+                $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
+                $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
+
                 $pegawai = $user?->pegawai;
                 $poliId = $pegawai?->poli_id;
 
@@ -26,8 +30,29 @@ class PendaftaransTable
                     ->latest('tanggal_pendaftaran')
                     ->latest('id');
 
-                if ($poliId && ! $user?->hasRole('super_admin')) {
+                if ($poliId && ! $isAdmin) {
                     $query->where('poli_id', $poliId);
+                }
+
+                if ($isDokter && ! $isAdmin) {
+                    // DOKTER: Hanya melihat pasien yang sudah selesai diisi pemeriksaan & CPPT oleh perawat (status: Menunggu Dokter / Sedang Diperiksa)
+                    $query->whereIn('status_pelayanan', [
+                        Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                        Pendaftaran::STATUS_SEDANG_DIPERIKSA,
+                    ]);
+
+                    if ($pegawai?->id) {
+                        $query->where(function ($q) use ($pegawai) {
+                            $q->where('dokter_id', $pegawai->id)
+                              ->orWhereNull('dokter_id');
+                        });
+                    }
+                } elseif ($isPerawat && ! $isAdmin) {
+                    // PERAWAT: Melihat pasien yang baru mendaftar (Menunggu) dan yang sedang dalam asesmen perawat
+                    $query->whereIn('status_pelayanan', [
+                        Pendaftaran::STATUS_MENUNGGU,
+                        Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                    ]);
                 }
 
                 return $query;
@@ -107,19 +132,14 @@ class PendaftaransTable
                         }
 
                         if ($value === 'selesai') {
-                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_FINAL, 'Selesai']);
+                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_FINAL, 'Selesai', 'Final']);
                         }
 
-                        return $query->whereIn('status_pelayanan', [
-                            Pendaftaran::STATUS_MENUNGGU,
-                            Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
-                            Pendaftaran::STATUS_MENUNGGU_DOKTER,
-                            Pendaftaran::STATUS_SEDANG_DIPERIKSA,
-                        ]);
+                        return $query;
                     }),
             ])
             ->actions([
-                // 1. Tombol Terima (Perawat & Dokter) - Saat status Menunggu atau Menunggu Dokter
+                // 1. Tombol Terima (Perawat & Dokter)
                 Action::make('terima')
                     ->label('Terima')
                     ->button()
@@ -129,11 +149,19 @@ class PendaftaransTable
                     ->visible(function (Pendaftaran $record): bool {
                         /** @var User|null $user */
                         $user = Auth::user();
-                        $isAuthorized = $user && (
-                            $user->hasRole(['super_admin', 'Admin', 'Perawat', 'Bidan', 'Dokter']) ||
-                            ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan', 'Dokter']))
-                        );
-                        return $isAuthorized && in_array($record->status_pelayanan, [
+                        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+                        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
+                        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
+
+                        if ($isDokter && ! $isAdmin) {
+                            return $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU_DOKTER;
+                        }
+
+                        if ($isPerawat && ! $isAdmin) {
+                            return $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU;
+                        }
+
+                        return in_array($record->status_pelayanan, [
                             Pendaftaran::STATUS_MENUNGGU,
                             Pendaftaran::STATUS_MENUNGGU_DOKTER,
                         ]);

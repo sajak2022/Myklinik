@@ -79,25 +79,60 @@
             playSingleSound();
         });
 
-        // Pemicu Saat Notifikasi Filament Muncul
-        window.addEventListener('open-notification', function () {
-            playSingleSound();
+        // Fungsi pembaca jumlah notifikasi belum dibaca di lonceng topbar
+        function getUnreadNotificationsCount() {
+            const badge = document.querySelector('.fi-topbar-database-notifications-btn .fi-badge, .fi-topbar-database-notifications-btn [class*="badge"], .fi-icon-btn-badge, [data-indicator="unread-notifications"]');
+            if (badge) {
+                const count = parseInt(badge.textContent.trim() || '0', 10);
+                if (!isNaN(count)) return count;
+            }
+            return 0;
+        }
+
+        let lastCount = null;
+
+        function updateAndCheckSound() {
+            const currentCount = getUnreadNotificationsCount();
+            if (lastCount !== null && currentCount > lastCount) {
+                playSingleSound();
+            }
+            lastCount = currentCount;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lastCount = getUnreadNotificationsCount();
+
+            // Pasang observer khusus pada area lonceng notifikasi di topbar
+            const topbarBell = document.querySelector('.fi-topbar-database-notifications-btn') || document.querySelector('.fi-topbar');
+            if (topbarBell && window.MutationObserver) {
+                const observer = new MutationObserver(() => {
+                    updateAndCheckSound();
+                });
+                observer.observe(topbarBell, { childList: true, subtree: true, characterData: true });
+            }
         });
 
-        // Dukungan Event Livewire
+        // Dukungan Event Livewire & Database Notifications
         document.addEventListener('livewire:init', function () {
             if (window.Livewire) {
                 Livewire.on('play-notification-sound', function () {
                     playSingleSound();
                 });
+
+                Livewire.on('database-notifications.sent', function () {
+                    playSingleSound();
+                });
+
+                Livewire.hook('commit', ({ component, succeed }) => {
+                    succeed(() => {
+                        const name = component.name || '';
+                        if (name.includes('database-notifications') || name.includes('notifications')) {
+                            setTimeout(updateAndCheckSound, 100);
+                        }
+                    });
+                });
             }
         });
-
-        @if (session('play_sound_on_load'))
-            setTimeout(function () {
-                playSingleSound();
-            }, 300);
-        @endif
     })();
 </script>
 @endif

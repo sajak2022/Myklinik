@@ -58,20 +58,43 @@ class CreatePendaftaran extends CreateRecord
         $pasienNama = $record->pasien?->nama ?? 'Pasien';
         $noAntrian = $record->no_antrian ?? '-';
         $poliNama = $record->poli?->nama ?? 'Poli Tujuan';
+        $poliId = $record->poli_id;
 
-        // Set flash session agar suara berbunyi saat redirect halaman index
-        session()->flash('play_sound_on_load', true);
-        $this->dispatch('play-notification-sound');
+        // Cari seluruh user Perawat & Bidan untuk poli terkait (atau seluruh perawat jika poli belum diset)
+        $perawatUsers = \App\Models\User::where(function ($query) {
+            $query->whereHas('roles', fn ($q) => $q->whereIn('name', ['Perawat', 'Bidan']))
+                ->orWhereHas('pegawai', fn ($q) => $q->whereIn('profesi', ['Perawat', 'Bidan']));
+        })
+        ->when($poliId, function ($query) use ($poliId) {
+            $query->whereHas('pegawai', function ($q) use ($poliId) {
+                $q->where('poli_id', $poliId);
+            });
+        })
+        ->get();
 
-        // Kirim ke database notification pengguna saat ini
-        if ($user = Auth::user()) {
+        // Jika tidak ada perawat khusus pada poli terkait, kirimkan ke semua perawat
+        if ($perawatUsers->isEmpty()) {
+            $perawatUsers = \App\Models\User::where(function ($query) {
+                $query->whereHas('roles', fn ($q) => $q->whereIn('name', ['Perawat', 'Bidan']))
+                    ->orWhereHas('pegawai', fn ($q) => $q->whereIn('profesi', ['Perawat', 'Bidan']));
+            })->get();
+        }
+
+        // Kirimkan notifikasi ke database user Perawat
+        if ($perawatUsers->isNotEmpty()) {
             Notification::make()
-                ->title('Pendaftaran Pasien Selesai')
-                ->body("Pasien {$pasienNama} (No. Antrian: {$noAntrian}) berhasil didaftarkan ke {$poliNama}.")
-                ->icon('heroicon-o-check-circle')
-                ->iconColor('success')
-                ->success()
-                ->sendToDatabase($user);
+                ->title('Pasien Masuk Baru')
+                ->body("Pasien {$pasienNama} (No. Antrian: {$noAntrian}) telah terdaftar di {$poliNama}. Silakan lakukan pemeriksaan awal.")
+                ->icon('heroicon-o-user-plus')
+                ->iconColor('info')
+                ->info()
+                ->actions([
+                    \Filament\Actions\Action::make('terima')
+                        ->button()
+                        ->label('Lihat Pengunjung')
+                        ->url(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index')),
+                ])
+                ->sendToDatabase($perawatUsers);
         }
     }
 

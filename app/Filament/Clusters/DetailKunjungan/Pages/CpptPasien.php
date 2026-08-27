@@ -265,15 +265,16 @@ class CpptPasien extends Page implements HasForms, HasTable
                 }
 
                 $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+                $this->pendaftaran->kirimNotifikasiKeDokter();
                 session()->forget('active_pendaftaran_id');
 
                 Notification::make()
                     ->title('Pasien Berhasil Diteruskan ke Dokter')
-                    ->body("Pasien {$this->pendaftaran->pasien?->nama} telah diteruskan ke antrean dokter.")
+                    ->body("Pasien {$this->pendaftaran->pasien?->nama} telah diteruskan ke antrean dokter dan notifikasi telah dikirimkan.")
                     ->success()
                     ->send();
 
-                $this->redirect(\App\Filament\Pages\KunjunganPasien::getUrl());
+                $this->redirect(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index'));
             });
     }
 
@@ -598,6 +599,7 @@ class CpptPasien extends Page implements HasForms, HasTable
         if ($this->pendaftaran->isSiapUntukDokter()
             && in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU], true)) {
             $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+            $this->pendaftaran->kirimNotifikasiKeDokter();
         }
     }
 

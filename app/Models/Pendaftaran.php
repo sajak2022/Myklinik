@@ -167,24 +167,46 @@ class Pendaftaran extends Model
 
     public function hasPemeriksaanFisik(): bool
     {
+        if ($this->relationLoaded('pemeriksaanFisiks')) {
+            return $this->pemeriksaanFisiks->isNotEmpty();
+        }
+
         return $this->pemeriksaanFisiks()->exists();
     }
 
     public function hasPemeriksaanFisikByProfesi(string|array $profesi): bool
     {
+        $profesi = (array) $profesi;
+
+        if ($this->relationLoaded('pemeriksaanFisiks')) {
+            return $this->pemeriksaanFisiks->contains(function ($pf) use ($profesi) {
+                return in_array($pf->pegawai?->profesi, $profesi, true);
+            });
+        }
+
         return $this->pemeriksaanFisiks()
-            ->whereHas('pegawai', fn ($query) => $query->whereIn('profesi', (array) $profesi))
+            ->whereHas('pegawai', fn ($query) => $query->whereIn('profesi', $profesi))
             ->exists();
     }
 
     public function hasCppt(): bool
     {
+        if ($this->relationLoaded('cpptRecords')) {
+            return $this->cpptRecords->isNotEmpty();
+        }
+
         return $this->cpptRecords()->exists();
     }
 
     public function hasCpptByProfesi(string|array $profesi): bool
     {
         $profesi = (array) $profesi;
+
+        if ($this->relationLoaded('cpptRecords')) {
+            return $this->cpptRecords->contains(function ($cppt) use ($profesi) {
+                return in_array($cppt->pegawai?->profesi ?? $cppt->profesi, $profesi, true);
+            });
+        }
 
         return $this->cpptRecords()
             ->where(function ($query) use ($profesi) {
@@ -198,8 +220,7 @@ class Pendaftaran extends Model
 
     public function isSiapUntukDokter(): bool
     {
-        return $this->hasPemeriksaanFisikByProfesi(['Perawat', 'Bidan'])
-            && $this->hasCpptByProfesi(['Perawat', 'Bidan']);
+        return $this->hasPemeriksaanFisik() && $this->hasCppt();
     }
 
     public function getStatusLabelAttribute(): string
@@ -339,5 +360,52 @@ class Pendaftaran extends Model
     {
         $newStatus = $this->dokter_id ? self::STATUS_SEDANG_DIPERIKSA : self::STATUS_MENUNGGU_DOKTER;
         $this->update(['status_pelayanan' => $newStatus]);
+    }
+
+    public function kirimNotifikasiKeDokter(): void
+    {
+        $this->loadMissing(['pasien', 'poli', 'dokter.user']);
+        $pasienNama = $this->pasien?->nama ?? 'Pasien';
+        $noAntrian = $this->no_antrian ?? '-';
+        $poliNama = $this->poli?->nama ?? 'Poli';
+        $dokterId = $this->dokter_id;
+        $poliId = $this->poli_id;
+
+        $dokterUsers = collect();
+        if ($dokterId && $this->dokter?->user_id) {
+            $dokterUser = User::find($this->dokter->user_id);
+            if ($dokterUser) {
+                $dokterUsers->push($dokterUser);
+            }
+        }
+
+        if ($dokterUsers->isEmpty()) {
+            $dokterUsers = User::where(function ($query) {
+                $query->whereHas('roles', fn ($q) => $q->where('name', 'Dokter'))
+                    ->orWhereHas('pegawai', fn ($q) => $q->where('profesi', 'Dokter'));
+            })
+            ->when($poliId, function ($query) use ($poliId) {
+                $query->whereHas('pegawai', function ($q) use ($poliId) {
+                    $q->where('poli_id', $poliId);
+                });
+            })
+            ->get();
+        }
+
+        if ($dokterUsers->isNotEmpty()) {
+            \Filament\Notifications\Notification::make()
+                ->title('Pasien Siap Diperiksa')
+                ->body("Asesmen perawat untuk pasien {$pasienNama} (No. Antrian: {$noAntrian}) di {$poliNama} telah lengkap. Pasien siap untuk diperiksa dokter.")
+                ->icon('heroicon-o-clipboard-document-check')
+                ->iconColor('info')
+                ->info()
+                ->actions([
+                    \Filament\Actions\Action::make('terima')
+                        ->button()
+                        ->label('Buka Pengunjung')
+                        ->url(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index')),
+                ])
+                ->sendToDatabase($dokterUsers);
+        }
     }
 }

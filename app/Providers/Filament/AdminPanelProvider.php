@@ -46,7 +46,7 @@ class AdminPanelProvider extends PanelProvider
             ->font('Poppins')
             ->sidebarCollapsibleOnDesktop()
             ->databaseNotifications()
-            ->databaseNotificationsPolling('30s')
+            ->databaseNotificationsPolling('5s')
             ->colors([
                 'primary' => Color::Blue,
             ])
