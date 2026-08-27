@@ -4,8 +4,6 @@ namespace App\Filament\Clusters\DetailKunjungan\Pages;
 
 use App\Filament\Clusters\DetailKunjungan;
 use App\Models\CpptRecord;
-use App\Models\Pasien;
-use App\Models\Pegawai;
 use App\Models\Pendaftaran;
 use App\Models\User;
 use BackedEnum;
@@ -16,7 +14,6 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -32,6 +29,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 
 class CpptPasien extends Page implements HasForms, HasTable
 {
@@ -55,6 +53,40 @@ class CpptPasien extends Page implements HasForms, HasTable
     public ?int $record = null;
     public ?Pendaftaran $pendaftaran = null;
     public ?array $data = [];
+
+    #[On('trigger-selesaikan-pelayanan')]
+    public function triggerSelesaikanPelayanan(): void
+    {
+        $this->mountAction('selesaikanPelayanan');
+    }
+
+    public function selesaikanPelayananAction(): Action
+    {
+        return Action::make('selesaikanPelayanan')
+            ->label('Selesaikan Pelayanan')
+            ->icon('heroicon-m-check-badge')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Selesaikan Pelayanan Pasien?')
+            ->modalDescription(fn () => "Apakah Anda yakin ingin menyelesaikan pelayanan untuk pasien {$this->pendaftaran?->pasien?->nama} ({$this->pendaftaran?->no_pendaftaran})?")
+            ->modalSubmitActionLabel('Ya, Selesaikan')
+            ->action(function () {
+                if (! $this->pendaftaran) {
+                    return;
+                }
+
+                $this->pendaftaran->update(['status_pelayanan' => 'Selesai']);
+                session()->forget('active_pendaftaran_id');
+
+                Notification::make()
+                    ->title('Pelayanan Selesai')
+                    ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} telah berhasil diselesaikan.")
+                    ->success()
+                    ->send();
+
+                $this->redirect(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index'));
+            });
+    }
 
     public function mount($record = null): void
     {

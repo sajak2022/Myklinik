@@ -3,13 +3,13 @@
 namespace App\Filament\Resources\Pendaftarans\Tables;
 
 use App\Models\Pendaftaran;
+use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Columns\ViewColumn;
-use Filament\Tables\Enums\FiltersLayout;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class PendaftaransTable
 {
@@ -48,29 +48,12 @@ class PendaftaransTable
                     ->alignment(Alignment::Center),
             ])
             ->defaultSort('tanggal_pendaftaran', 'desc')
-            ->filtersLayout(FiltersLayout::Dropdown)
             ->recordUrl(null)
             ->filters([
-                // Filter Periode Tanggal
-                SelectFilter::make('periode')
-                    ->label('Periode Waktu')
-                    ->placeholder('Hari Ini')
-                    ->options([
-                        'minggu_ini' => 'Minggu Ini',
-                        'bulan_ini'  => 'Bulan Ini',
-                        'tahun_ini'  => 'Tahun Ini',
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? null) {
-                            'minggu_ini' => $query->whereBetween('tanggal_pendaftaran', [now()->startOfWeek(), now()->endOfWeek()]),
-                            'bulan_ini'  => $query->whereMonth('tanggal_pendaftaran', now()->month)->whereYear('tanggal_pendaftaran', now()->year),
-                            'tahun_ini'  => $query->whereYear('tanggal_pendaftaran', now()->year),
-                            default      => $query->whereDate('tanggal_pendaftaran', today()),
-                        };
-                    }),
+                //
             ])
             ->actions([
-                // 1. Tombol Terima (Atas) - Saat status Menunggu
+                // 1. Tombol Terima - Saat status Menunggu
                 Action::make('terima')
                     ->label('Terima')
                     ->button()
@@ -90,7 +73,48 @@ class PendaftaransTable
                         return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
                     }),
 
-                // 2. Tombol Batal (Bawah) - Saat status Menunggu
+                // 2. Tombol Periksa / Buka Layanan - Saat status Sedang Diperiksa
+                Action::make('periksa')
+                    ->label('Periksa')
+                    ->button()
+                    ->color('info')
+                    ->size('sm')
+                    ->icon('heroicon-m-arrow-right-circle')
+                    ->visible(fn (Pendaftaran $record): bool => $record->status_pelayanan === 'Sedang Diperiksa')
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
+
+                // 3. Tombol Selesaikan Pelayanan - Khusus Admin & Dokter
+                Action::make('selesaikan')
+                    ->label('Selesaikan')
+                    ->button()
+                    ->color('success')
+                    ->size('sm')
+                    ->icon('heroicon-m-check-badge')
+                    ->requiresConfirmation()
+                    ->modalHeading('Selesaikan Pelayanan Pasien?')
+                    ->modalDescription('Apakah Anda yakin ingin menyelesaikan proses pelayanan/pemeriksaan untuk pasien ini?')
+                    ->modalSubmitActionLabel('Ya, Selesaikan')
+                    ->visible(function (Pendaftaran $record): bool {
+                        /** @var User|null $user */
+                        $user = Auth::user();
+                        $isAuthorized = $user && (
+                            $user->hasRole(['super_admin', 'Admin', 'Dokter']) ||
+                            ($user->pegawai && in_array($user->pegawai->profesi, ['Dokter']))
+                        );
+
+                        return $isAuthorized && in_array($record->status_pelayanan, ['Sedang Diperiksa', 'Menunggu']);
+                    })
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => 'Selesai']);
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('Pelayanan Selesai')
+                            ->body("Pelayanan untuk pasien {$record->pasien?->nama} telah berhasil diselesaikan.")
+                            ->success()
+                            ->send();
+                    }),
+
+                // 4. Tombol Batal - Saat status Menunggu
                 Action::make('batal')
                     ->label('Batal')
                     ->button()

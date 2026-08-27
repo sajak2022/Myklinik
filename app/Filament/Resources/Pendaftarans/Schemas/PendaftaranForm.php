@@ -5,15 +5,13 @@ namespace App\Filament\Resources\Pendaftarans\Schemas;
 use App\Models\Pasien;
 use App\Models\Pegawai;
 use App\Models\Pendaftaran;
-use App\Models\Poli;
-use App\Models\ReferensiDetail;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -119,6 +117,7 @@ class PendaftaranForm
                                             ])
                                             ->default('Pelayanan Rawat Jalan')
                                             ->required()
+                                            ->native(false)
                                             ->columnSpanFull(),
 
                                         Select::make('kategori_pelayanan')
@@ -129,6 +128,7 @@ class PendaftaranForm
                                                 'Pelayanan Penunjang Medis'    => 'Pelayanan Penunjang Medis',
                                             ])
                                             ->default('Pelayanan Medik Dasar')
+                                            ->native(false)
                                             ->dehydrated(false),
 
                                         Select::make('poli_id')
@@ -205,6 +205,7 @@ class PendaftaranForm
                                                 'Bukan KLL dan Kecelakaan Kerja' => 'Bukan KLL dan Kecelakaan Kerja',
                                             ])
                                             ->placeholder('Pilih Jenis')
+                                            ->native(false)
                                             ->visible(fn (Get $get): bool => (bool) $get('is_kecelakaan')),
 
                                         TextInput::make('no_laporan_polisi')
@@ -227,6 +228,7 @@ class PendaftaranForm
                                                 'ASABRI'                => 'ASABRI',
                                                 'Pribadi / Lainnya'     => 'Pribadi / Lainnya',
                                             ])
+                                            ->native(false)
                                             ->visible(fn (Get $get): bool => (bool) $get('is_kecelakaan')),
 
                                         TextInput::make('lokasi_kecelakaan')
@@ -269,6 +271,7 @@ class PendaftaranForm
                                                 'Diri Sendiri'    => 'Diri Sendiri',
                                             ])
                                             ->placeholder('Pilih Hubungan')
+                                            ->native(false)
                                             ->visible(fn (Get $get): bool => (bool) $get('ada_pj')),
 
                                         TextInput::make('pj_no_telepon')
@@ -286,6 +289,7 @@ class PendaftaranForm
                                                 'Lainnya' => 'Lainnya',
                                             ])
                                             ->default('KTP')
+                                            ->native(false)
                                             ->visible(fn (Get $get): bool => (bool) $get('ada_pj')),
 
                                         TextInput::make('pj_nomor_kartu')

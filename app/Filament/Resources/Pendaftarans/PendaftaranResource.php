@@ -28,6 +28,8 @@ class PendaftaranResource extends Resource
 
     protected static ?string $navigationLabel = 'Pengunjung';
 
+    protected static ?string $slug = 'pengunjung';
+
     protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema

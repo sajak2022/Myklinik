@@ -36,16 +36,17 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
-            ->brandName(fn () => \App\Models\Pengaturan::getPengaturan()->nama_klinik ?? 'Myklinik')
-            ->brandLogo(fn () => \App\Models\Pengaturan::getLogoUrl())
-            ->darkModeBrandLogo(fn () => \App\Models\Pengaturan::getDarkModeLogoUrl())
-            ->favicon(fn () => \App\Models\Pengaturan::getFaviconUrl())
-            ->brandLogoHeight(fn () => \App\Models\Pengaturan::getLogoHeight())
+            ->brandName(fn() => \App\Models\Pengaturan::getPengaturan()->nama_klinik ?? 'Myklinik')
+            ->brandLogo(fn() => \App\Models\Pengaturan::getLogoUrl())
+            ->darkModeBrandLogo(fn() => \App\Models\Pengaturan::getDarkModeLogoUrl())
+            ->favicon(fn() => \App\Models\Pengaturan::getFaviconUrl())
+            ->brandLogoHeight(fn() => \App\Models\Pengaturan::getLogoHeight())
             ->login()
             ->spa()
             ->font('Poppins')
             ->sidebarCollapsibleOnDesktop()
-            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->colors([
                 'primary' => Color::Blue,
             ])
@@ -76,15 +77,23 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn () => view('filament.components.auth-styles')
+                fn() => view('filament.components.auth-styles')
             )
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
-                fn () => view('filament.components.navbar-create-pasien')
+                fn() => view('filament.components.topbar-selesaikan-pelayanan')
+            )
+            ->renderHook(
+                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                fn() => view('filament.components.navbar-create-pasien')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn () => view('filament.components.idle-timer')
+                fn() => view('filament.components.idle-timer')
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn() => view('filament.components.notification-sound-player')
             )
             ->middleware([
                 EncryptCookies::class,

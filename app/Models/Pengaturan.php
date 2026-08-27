@@ -17,6 +17,11 @@ class Pengaturan extends Model
         'favicon',
         'brand_logo_height',
         'lock_timeout_minutes',
+        'notifikasi_suara',
+    ];
+
+    protected $casts = [
+        'notifikasi_suara' => 'boolean',
     ];
 
     protected static ?self $instance = null;
@@ -35,6 +40,7 @@ class Pengaturan extends Model
                 'favicon' => null,
                 'brand_logo_height' => '3rem',
                 'lock_timeout_minutes' => 5,
+                'notifikasi_suara' => true,
             ]);
         } catch (\Throwable $e) {
             static::$instance = new self([
@@ -44,6 +50,7 @@ class Pengaturan extends Model
                 'favicon' => null,
                 'brand_logo_height' => '3rem',
                 'lock_timeout_minutes' => 5,
+                'notifikasi_suara' => true,
             ]);
         }
 

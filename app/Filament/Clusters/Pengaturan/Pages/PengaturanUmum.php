@@ -7,6 +7,7 @@ use App\Models\Pengaturan as PengaturanModel;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -68,6 +69,16 @@ class PengaturanUmum extends Page implements HasForms
                             ->maxValue(120)
                             ->required()
                             ->helperText('Layar terkunci otomatis jika tidak ada aktivitas (default: 5 menit).'),
+                    ]),
+
+                Section::make('Pengaturan Suara Notifikasi')
+                    ->icon('heroicon-o-speaker-wave')
+                    ->columns(1)
+                    ->schema([
+                        Toggle::make('notifikasi_suara')
+                            ->label('Aktifkan Bunyi Suara Notifikasi')
+                            ->helperText('Nyalakan/matikan bunyi suara audio saat ada pendaftaran pasien baru, pembatalan, maupun notifikasi sistem lainnya.')
+                            ->default(true),
                     ]),
 
                 Section::make('Logo & Favicon')

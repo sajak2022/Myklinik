@@ -54,8 +54,8 @@ class ViewPasien extends ViewRecord
                 ->extraAttributes([
                     'style' => 'margin-right: 6px !important;',
                     'class' => $hasActive
-                        ? '!bg-gray-100 dark:!bg-gray-800/90 !text-amber-500 dark:!text-amber-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 opacity-60 shadow-sm'
-                        : '!bg-gray-100 hover:!bg-gray-200 dark:!bg-gray-800/90 dark:hover:!bg-gray-700/90 !text-emerald-600 dark:!text-emerald-400 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 transition shadow-sm',
+                        ? '!bg-gray-100 dark:!bg-gray-800/90 !text-orange-500/70 dark:!text-orange-400/70 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 opacity-60 shadow-sm cursor-not-allowed'
+                        : '!bg-gray-100 hover:!bg-gray-200 dark:!bg-gray-800/90 dark:hover:!bg-gray-700/90 !text-orange-500 hover:!text-orange-600 dark:!text-orange-400 dark:hover:!text-orange-300 border border-gray-200/90 dark:border-gray-700/80 rounded-lg p-1.5 transition shadow-sm',
                 ])
                 ->url(fn () => $hasActive ? null : \App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('create', ['pasien_id' => $this->record->id])),
 
