@@ -11,7 +11,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class PasienPolicy
 {
     use HandlesAuthorization;
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Pasien');
@@ -19,7 +19,7 @@ class PasienPolicy
 
     public function view(AuthUser $authUser, Pasien $pasien): bool
     {
-        return $authUser->can('View:Pasien') || $authUser->hasRole(['Dokter', 'Perawat', 'super_admin']);
+        return $authUser->can('View:Pasien');
     }
 
     public function create(AuthUser $authUser): bool

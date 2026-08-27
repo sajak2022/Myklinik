@@ -41,18 +41,43 @@ class KunjunganPasien extends Page implements HasTable
     {
         /** @var User|null $user */
         $user = Auth::user();
+        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
+        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
+
+        $pegawai = $user?->pegawai;
+        $poliId = $pegawai?->poli_id;
+
         $query = Pendaftaran::query()
-            ->whereIn('status_pelayanan', ['Sedang Diperiksa', 'Selesai'])
-            ->with(['pasien.tempatLahir', 'poli', 'dokter'])
+            ->with(['pasien.tempatLahir', 'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'])
             ->latest('tanggal_pendaftaran');
 
-        // Otomatis filter antrian/kunjungan sesuai Poli penugasan staf yang login (Perawat Poli Umum vs Perawat Poli Gigi)
-        if ($user && ! $user->hasRole('super_admin')) {
-            $pegawai = $user->pegawai;
-            if ($pegawai && $pegawai->poli_id) {
-                $query->where('poli_id', $pegawai->poli_id);
+        if ($isDokter && ! $isAdmin) {
+            // DOKTER: Hanya menerima pasien setelah perawat selesai mengisi pemeriksaan & CPPT
+            $query->untukDokter($poliId, $pegawai?->id);
+        } elseif ($isPerawat && ! $isAdmin) {
+            // PERAWAT: Menerima pasien dari loket pendaftaran (Menunggu) hingga Selesai untuk poli terkait
+            $query->untukPerawat($poliId);
+        } else {
+            // ADMIN / SUPER ADMIN: Melihat seluruh status kunjungan
+            if ($poliId && ! $user->hasRole('super_admin')) {
+                $query->where('poli_id', $poliId);
             }
         }
+
+        $statusFilterOptions = $isDokter && ! $isAdmin
+            ? [
+                Pendaftaran::STATUS_MENUNGGU_DOKTER  => 'Siap Diperiksa Dokter (Pemeriksaan Perawat Selesai)',
+                Pendaftaran::STATUS_SEDANG_DIPERIKSA => 'Sedang Diperiksa Dokter',
+                Pendaftaran::STATUS_SELESAI          => 'Pelayanan Selesai',
+            ]
+            : [
+                Pendaftaran::STATUS_MENUNGGU            => 'Menunggu Antrian Perawat',
+                Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'Pemeriksaan Perawat (TTV & CPPT)',
+                Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'Menunggu Pemeriksaan Dokter',
+                Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
+                Pendaftaran::STATUS_SELESAI             => 'Pelayanan Selesai',
+            ];
 
         return $table
             ->query($query)
@@ -113,22 +138,178 @@ class KunjunganPasien extends Page implements HasTable
                 // Filter Status Pelayanan
                 SelectFilter::make('status_pelayanan')
                     ->label('Status Pelayanan')
-                    ->placeholder('Pilih Status')
-                    ->options([
-                        'Sedang Diperiksa' => 'Pasien Berada di ruangan ini / Sedang dilayani',
-                        'Selesai'          => 'Selesai',
-                    ]),
+                    ->placeholder('Semua Status')
+                    ->options($statusFilterOptions),
             ])
             ->actions([
-                // 1. Tombol Lihat Data Detail Kunjungan (Abu-abu)
+                // 1. Aksi untuk Perawat: Terima Pasien dari Antrian Pendaftaran
+                Action::make('terima_perawat')
+                    ->label('Terima')
+                    ->button()
+                    ->color('info')
+                    ->size('sm')
+                    ->icon('heroicon-m-check-circle')
+                    ->visible(function (Pendaftaran $record) use ($isPerawat, $isAdmin): bool {
+                        return ($isPerawat || $isAdmin) && $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU;
+                    })
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT]);
+                        session(['active_pendaftaran_id' => $record->id]);
+
+                        Notification::make()
+                            ->title('Pasien Diterima')
+                            ->body("Pasien {$record->pasien?->nama} telah diterima untuk pemeriksaan awal oleh perawat.")
+                            ->info()
+                            ->send();
+
+                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
+                    }),
+
+                // 2. Aksi untuk Perawat: Lanjutkan Pemeriksaan Perawat
+                Action::make('periksa_perawat')
+                    ->label('Periksa')
+                    ->button()
+                    ->color('primary')
+                    ->size('sm')
+                    ->icon('heroicon-m-arrow-right-circle')
+                    ->visible(function (Pendaftaran $record) use ($isPerawat, $isAdmin): bool {
+                        return ($isPerawat || $isAdmin) && $record->status_pelayanan === Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT;
+                    })
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
+
+                // 3. Aksi untuk Dokter: Terima Pasien (Setelah Perawat Mengisi Pemeriksaan & CPPT)
+                Action::make('terima_dokter')
+                    ->label('Terima')
+                    ->button()
+                    ->color('info')
+                    ->size('sm')
+                    ->icon('heroicon-m-check-circle')
+                    ->visible(function (Pendaftaran $record) use ($isDokter, $isAdmin): bool {
+                        return ($isDokter || $isAdmin) && $record->status_pelayanan === Pendaftaran::STATUS_MENUNGGU_DOKTER;
+                    })
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_SEDANG_DIPERIKSA]);
+                        session(['active_pendaftaran_id' => $record->id]);
+
+                        Notification::make()
+                            ->title('Pasien Diterima')
+                            ->body("Pasien {$record->pasien?->nama} telah masuk ke ruang pemeriksaan dokter.")
+                            ->success()
+                            ->send();
+
+                        return redirect()->to(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
+                    }),
+
+                // 4. Aksi untuk Dokter: Periksa / Buka Layanan Pasien
+                Action::make('periksa_dokter')
+                    ->label('Periksa')
+                    ->button()
+                    ->color('info')
+                    ->size('sm')
+                    ->icon('heroicon-m-arrow-right-circle')
+                    ->visible(function (Pendaftaran $record) use ($isDokter, $isAdmin): bool {
+                        return ($isDokter || $isAdmin) && $record->status_pelayanan === Pendaftaran::STATUS_SEDANG_DIPERIKSA;
+                    })
+                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
+
+                // 5. Aksi untuk Dokter & Admin: Selesaikan Pelayanan
+                Action::make('selesaikan')
+                    ->label('Selesaikan')
+                    ->button()
+                    ->color('success')
+                    ->size('sm')
+                    ->icon('heroicon-m-check-badge')
+                    ->requiresConfirmation()
+                    ->modalIcon('heroicon-o-exclamation-triangle')
+                    ->modalHeading('Selesaikan Pelayanan Pasien?')
+                    ->modalDescription(fn (Pendaftaran $record) => "Dokter akan menyelesaikan pelayanan/pemeriksaan pasien {$record->pasien?->nama}. Status kunjungan akan berubah menjadi Selesai dan tidak lagi masuk antrean aktif.")
+                    ->modalSubmitActionLabel('Ya, Selesaikan')
+                    ->visible(function (Pendaftaran $record) use ($isDokter, $isAdmin): bool {
+                        return ($isDokter || $isAdmin) && $record->status_pelayanan === Pendaftaran::STATUS_SEDANG_DIPERIKSA;
+                    })
+                    ->action(fn (Pendaftaran $record) => $this->selesaikanPelayanan($record)),
+
+                // 6. Tombol Lihat Data Detail Kunjungan (Abu-abu)
                 Action::make('lihat')
                     ->label('Lihat')
                     ->button()
                     ->color('gray')
                     ->size('sm')
                     ->icon('heroicon-m-eye')
+                    ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, [Pendaftaran::STATUS_SELESAI, Pendaftaran::STATUS_MENUNGGU_DOKTER]))
                     ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
+
+                // 7. Aksi Batal untuk Perawat & Admin
+                Action::make('batal_perawat')
+                    ->label('Batal')
+                    ->button()
+                    ->color('danger')
+                    ->size('sm')
+                    ->icon('heroicon-m-x-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Kunjungan Pasien?')
+                    ->modalDescription(fn (Pendaftaran $record) => "Apakah Anda yakin ingin membatalkan pendaftaran pelayanan pasien {$record->pasien?->nama}?")
+                    ->modalSubmitActionLabel('Ya, Batalkan')
+                    ->visible(function (Pendaftaran $record) use ($isPerawat, $isAdmin): bool {
+                        return ($isPerawat || $isAdmin) && in_array($record->status_pelayanan, [Pendaftaran::STATUS_MENUNGGU, Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT]);
+                    })
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_BATAL]);
+                        if (session('active_pendaftaran_id') == $record->id) {
+                            session()->forget('active_pendaftaran_id');
+                        }
+
+                        Notification::make()
+                            ->title('Pendaftaran Dibatalkan')
+                            ->body("Kunjungan pasien {$record->pasien?->nama} telah dibatalkan.")
+                            ->warning()
+                            ->send();
+                    }),
             ]);
+    }
+
+    private function selesaikanPelayanan(Pendaftaran $record): void
+    {
+        $user = Auth::user();
+        $isAuthorized = $user && (
+            $user->hasRole(['super_admin', 'Admin', 'Dokter'])
+            || $user->pegawai?->profesi === 'Dokter'
+        );
+
+        if (! $isAuthorized) {
+            Notification::make()
+                ->title('Akses Ditolak')
+                ->body('Hanya dokter atau admin yang dapat menyelesaikan pelayanan pasien.')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        $record->refresh();
+
+        if ($record->status_pelayanan !== Pendaftaran::STATUS_SEDANG_DIPERIKSA) {
+            Notification::make()
+                ->title('Status Pasien Sudah Berubah')
+                ->body('Pasien ini sudah tidak berada dalam status pemeriksaan dokter.')
+                ->warning()
+                ->send();
+            $this->resetTable();
+            return;
+        }
+
+        $record->update(['status_pelayanan' => Pendaftaran::STATUS_SELESAI]);
+
+        if (session('active_pendaftaran_id') === $record->id) {
+            session()->forget('active_pendaftaran_id');
+        }
+
+        Notification::make()
+            ->title('Pelayanan Selesai')
+            ->body("Pelayanan untuk pasien {$record->pasien?->nama} telah berhasil diselesaikan.")
+            ->success()
+            ->send();
+
+        $this->resetTable();
     }
 }
 

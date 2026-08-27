@@ -9,19 +9,23 @@
     $pasienUrl = $pasien ? \App\Filament\Resources\Pasiens\PasienResource::getUrl('view', ['record' => $pasien->id]) : null;
 
     $statusText = match ($record->status_pelayanan) {
-        'Menunggu' => 'Menunggu Antrian',
-        'Sedang Diperiksa' => 'Sedang Dilayani',
-        'Selesai' => 'Pelayanan Selesai',
-        'Batal' => 'Pendaftaran Dibatalkan',
-        default => $record->status_pelayanan,
+        \App\Models\Pendaftaran::STATUS_MENUNGGU            => 'Menunggu Antrian Perawat',
+        \App\Models\Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'Sedang Dilayani Perawat',
+        \App\Models\Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'Siap Diperiksa Dokter (Asesmen Selesai)',
+        \App\Models\Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
+        \App\Models\Pendaftaran::STATUS_SELESAI             => 'Pelayanan Selesai',
+        \App\Models\Pendaftaran::STATUS_BATAL               => 'Pendaftaran Dibatalkan',
+        default                                             => $record->status_pelayanan,
     };
 
     $statusColor = match ($record->status_pelayanan) {
-        'Menunggu' => 'color: #f59e0b; font-weight: 600;',
-        'Sedang Diperiksa' => 'color: var(--primary-500, #3b82f6); font-weight: 700;',
-        'Selesai' => 'color: #10b981; font-weight: 700;',
-        'Batal' => 'color: #ef4444; font-weight: 600;',
-        default => 'color: #94a3b8;',
+        \App\Models\Pendaftaran::STATUS_MENUNGGU            => 'color: #f59e0b; font-weight: 600;',
+        \App\Models\Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'color: var(--primary-500, #3b82f6); font-weight: 700;',
+        \App\Models\Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'color: #8b5cf6; font-weight: 700;',
+        \App\Models\Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'color: #06b6d4; font-weight: 700;',
+        \App\Models\Pendaftaran::STATUS_SELESAI             => 'color: #10b981; font-weight: 700;',
+        \App\Models\Pendaftaran::STATUS_BATAL               => 'color: #ef4444; font-weight: 600;',
+        default                                             => 'color: #94a3b8;',
     };
 @endphp
 

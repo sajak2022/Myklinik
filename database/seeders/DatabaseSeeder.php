@@ -40,6 +40,8 @@ class DatabaseSeeder extends Seeder
             PenyediaSeeder::class,
             TindakanSeeder::class,
             BarangSeeder::class,
+            PasienSeeder::class,
+            PegawaiSeeder::class,
         ]);
     }
 }

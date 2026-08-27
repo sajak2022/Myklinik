@@ -40,7 +40,7 @@ class ViewPasien extends ViewRecord
     protected function getHeaderActions(): array
     {
         $hasActive = \App\Models\Pendaftaran::where('pasien_id', $this->record->id)
-            ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+            ->whereIn('status_pelayanan', \App\Models\Pendaftaran::ACTIVE_STATUSES)
             ->exists();
 
         return [

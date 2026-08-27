@@ -3,10 +3,9 @@
 namespace App\Filament\Resources\Pendaftarans\Schemas;
 
 use App\Models\Pendaftaran;
-use Carbon\Carbon;
-use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -20,138 +19,9 @@ class PendaftaranInfolist
         return $schema
             ->components([
                 // 1. CARD PROFIL PASIEN (PERSIS DENGAN INFOLIST PASIEN)
-                Section::make()
-                    ->schema([
-                        Grid::make(12)
-                            ->schema([
-                                // Foto Avatar Pasien
-                                Grid::make(1)
-                                    ->columnSpan(2)
-                                    ->schema([
-                                        Section::make()
-                                            ->schema([
-                                                ImageEntry::make('profile_foto')
-                                                    ->hiddenLabel()
-                                                    ->getStateUsing(function (Pendaftaran $record) {
-                                                        $jk = strtolower($record->pasien?->jenis_kelamin ?? '');
-
-                                                        if (str_contains($jk, 'l') && !str_contains($jk, 'p')) {
-                                                            return asset('profile/men.png');
-                                                        } elseif (str_contains($jk, 'p')) {
-                                                            return asset('profile/women.png');
-                                                        }
-
-                                                        return asset('profile/men.png');
-                                                    })
-                                                    ->size(110)
-                                                    ->alignCenter(),
-                                            ])
-                                            ->compact()
-                                            ->contained(true)
-                                            ->extraAttributes([
-                                                'class' => 'bg-gray-100 dark:bg-gray-800/60 rounded-xl',
-                                            ]),
-                                    ]),
-
-                                // Kolom 1 Data Pasien (4 Kolom)
-                                Grid::make(1)
-                                    ->columnSpan(4)
-                                    ->schema([
-                                        TextEntry::make('pasien.no_rm')
-                                            ->label('No. Rekam Medis')
-                                            ->size('lg')
-                                            ->weight('bold')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('nama_lengkap')
-                                            ->label('Nama Lengkap')
-                                            ->state(fn (Pendaftaran $record) => trim(
-                                                collect([$record->pasien?->gelar_depan, $record->pasien?->nama, $record->pasien?->gelar_belakang])
-                                                    ->filter()
-                                                    ->join(' ')
-                                            ))
-                                            ->size('lg')
-                                            ->weight('bold'),
-
-                                        TextEntry::make('ttl')
-                                            ->label('Tempat / Tanggal Lahir')
-                                            ->state(fn (Pendaftaran $record) => collect([
-                                                $record->pasien?->tempatLahir?->name,
-                                                optional($record->pasien?->tanggal_lahir)->translatedFormat('d F Y'),
-                                            ])->filter()->join(' / '))
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('umur')
-                                            ->label('Umur')
-                                            ->state(function (Pendaftaran $record) {
-                                                if (blank($record->pasien?->tanggal_lahir)) {
-                                                    return null;
-                                                }
-                                                $diff = Carbon::parse($record->pasien->tanggal_lahir)->diff(now());
-                                                return "{$diff->y}th {$diff->m}bln {$diff->d}hr";
-                                            })
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.agama.deskripsi')
-                                            ->label('Agama')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.jenis_kelamin')
-                                            ->label('Jenis Kelamin')
-                                            ->badge(),
-                                    ]),
-
-                                // Kolom 2 & 3 Data Pasien (6 Kolom dengan Grid 2)
-                                Grid::make(2)
-                                    ->columnSpan(6)
-                                    ->schema([
-                                        TextEntry::make('pasien.pendidikan.deskripsi')
-                                            ->label('Pendidikan')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.pekerjaan.deskripsi')
-                                            ->label('Pekerjaan')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.statusPerkawinan.deskripsi')
-                                            ->label('Status Perkawinan')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.golonganDarah.deskripsi')
-                                            ->label('Gol. Darah')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.sukuBangsa.deskripsi')
-                                            ->label('Suku Bangsa')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.country.name')
-                                            ->label('Kewarganegaraan')
-                                            ->placeholder('-'),
-
-                                        TextEntry::make('pasien.alamat')
-                                            ->label('Alamat')
-                                            ->placeholder('-')
-                                            ->columnSpan(2),
-
-                                        TextEntry::make('rt_rw')
-                                            ->label('RT / RW / Kode Pos')
-                                            ->state(fn (Pendaftaran $record) => "RT " . ($record->pasien?->rt ?? '-') . " / RW " . ($record->pasien?->rw ?? '-') . " (Pos: " . ($record->pasien?->kode_pos ?? '-') . ")")
-                                            ->columnSpan(2),
-
-                                        TextEntry::make('wilayah')
-                                            ->label('Wilayah (Kel / Kec / Kab / Prov)')
-                                            ->state(fn (Pendaftaran $record) => collect([
-                                                $record->pasien?->village?->name,
-                                                $record->pasien?->district?->name,
-                                                $record->pasien?->regency?->name,
-                                                $record->pasien?->province?->name,
-                                            ])->filter()->join(', '))
-                                            ->placeholder('-')
-                                            ->columnSpan(2),
-                                    ]),
-                            ]),
-                    ]),
+                ViewEntry::make('profile_card')
+                    ->view('filament.infolists.components.patient-profile-card')
+                    ->columnSpanFull(),
 
                 // TABS DETAIL IDENTITAS, KELUARGA, KONTAK (PERSIS DENGAN INFOLIST PASIEN)
                 Tabs::make('Detail Pasien')
@@ -264,11 +134,22 @@ class PendaftaranInfolist
                         TextEntry::make('status_pelayanan')
                             ->label('Status Pelayanan')
                             ->badge()
+                            ->formatStateUsing(fn (string $state): string => match ($state) {
+                                Pendaftaran::STATUS_MENUNGGU            => 'Menunggu Antrian Perawat',
+                                Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'Sedang Dilayani Perawat',
+                                Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'Siap Diperiksa Dokter',
+                                Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
+                                Pendaftaran::STATUS_SELESAI             => 'Pelayanan Selesai',
+                                Pendaftaran::STATUS_BATAL               => 'Dibatalkan',
+                                default                                 => $state,
+                            })
                             ->colors([
-                                'warning' => 'Menunggu',
-                                'info'    => 'Sedang Diperiksa',
-                                'success' => 'Selesai',
-                                'danger'  => 'Batal',
+                                'warning' => Pendaftaran::STATUS_MENUNGGU,
+                                'info'    => Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                                'primary' => Pendaftaran::STATUS_MENUNGGU_DOKTER,
+                                'cyan'    => Pendaftaran::STATUS_SEDANG_DIPERIKSA,
+                                'success' => Pendaftaran::STATUS_SELESAI,
+                                'danger'  => Pendaftaran::STATUS_BATAL,
                             ]),
 
                         TextEntry::make('jenis_pelayanan')

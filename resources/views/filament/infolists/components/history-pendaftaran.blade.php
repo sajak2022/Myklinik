@@ -15,19 +15,23 @@
 
     $itemsJson = $rawPendaftarans->map(function ($item, $index) {
         $badgeClass = match ($item->status_pelayanan) {
-            'Menunggu' => 'badge-menunggu',
-            'Sedang Diperiksa' => 'badge-diperiksa',
-            'Selesai' => 'badge-selesai',
-            'Batal' => 'badge-batal',
-            default => 'badge-default',
+            \App\Models\Pendaftaran::STATUS_MENUNGGU            => 'badge-menunggu',
+            \App\Models\Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'badge-diperiksa',
+            \App\Models\Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'badge-menunggu',
+            \App\Models\Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'badge-diperiksa',
+            \App\Models\Pendaftaran::STATUS_SELESAI             => 'badge-selesai',
+            \App\Models\Pendaftaran::STATUS_BATAL               => 'badge-batal',
+            default                                             => 'badge-default',
         };
 
         $statusLabel = match ($item->status_pelayanan) {
-            'Menunggu' => 'Menunggu Antrian',
-            'Sedang Diperiksa' => 'Sedang Dilayani',
-            'Selesai' => 'Selesai',
-            'Batal' => 'Dibatalkan / Tidak Aktif',
-            default => $item->status_pelayanan,
+            \App\Models\Pendaftaran::STATUS_MENUNGGU            => 'Menunggu Antrian Perawat',
+            \App\Models\Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT => 'Sedang Dilayani Perawat',
+            \App\Models\Pendaftaran::STATUS_MENUNGGU_DOKTER     => 'Siap Diperiksa Dokter (Asesmen Selesai)',
+            \App\Models\Pendaftaran::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
+            \App\Models\Pendaftaran::STATUS_SELESAI             => 'Pelayanan Selesai',
+            \App\Models\Pendaftaran::STATUS_BATAL               => 'Dibatalkan / Tidak Aktif',
+            default                                             => $item->status_pelayanan,
         };
 
         return [

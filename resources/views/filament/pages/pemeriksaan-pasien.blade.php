@@ -48,6 +48,12 @@
     </style>
 
     @if ($pendaftaran)
+        {{-- Navbar Khusus Detail Kunjungan --}}
+        @include('filament.clusters.detail-kunjungan.components.detail-kunjungan-navbar', [
+            'pendaftaran' => $pendaftaran,
+            'activeTab' => 'pemeriksaan',
+        ])
+
         {{-- Unified Patient Header Component --}}
         @include('filament.clusters.detail-kunjungan.components.patient-header', ['pendaftaran' => $pendaftaran])
 

@@ -41,7 +41,7 @@ class PendaftaranForm
                             ->afterStateUpdated(function ($state, Set $set) {
                                 if ($state) {
                                     $active = Pendaftaran::where('pasien_id', $state)
-                                        ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                                        ->whereIn('status_pelayanan', Pendaftaran::ACTIVE_STATUSES)
                                         ->first();
 
                                     if ($active) {
@@ -71,7 +71,7 @@ class PendaftaranForm
                             ->rules([
                                 fn (): \Closure => function (string $attribute, $value, \Closure $fail) {
                                     $active = Pendaftaran::where('pasien_id', $value)
-                                        ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                                        ->whereIn('status_pelayanan', Pendaftaran::ACTIVE_STATUSES)
                                         ->exists();
 
                                     if ($active) {

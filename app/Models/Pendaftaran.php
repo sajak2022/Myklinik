@@ -75,13 +75,27 @@ class Pendaftaran extends Model
         'biaya_pendaftaran'       => 'decimal:2',
     ];
 
+    public const STATUS_MENUNGGU = 'Menunggu';
+    public const STATUS_PEMERIKSAAN_PERAWAT = 'Pemeriksaan Perawat';
+    public const STATUS_MENUNGGU_DOKTER = 'Menunggu Dokter';
+    public const STATUS_SEDANG_DIPERIKSA = 'Sedang Diperiksa';
+    public const STATUS_SELESAI = 'Selesai';
+    public const STATUS_BATAL = 'Batal';
+
+    public const ACTIVE_STATUSES = [
+        self::STATUS_MENUNGGU,
+        self::STATUS_PEMERIKSAAN_PERAWAT,
+        self::STATUS_MENUNGGU_DOKTER,
+        self::STATUS_SEDANG_DIPERIKSA,
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (Pendaftaran $pendaftaran) {
             // 0. Validasi: Cegah 1 pasien memiliki lebih dari 1 pendaftaran aktif sekaligus
             if ($pendaftaran->pasien_id) {
                 $hasActive = static::where('pasien_id', $pendaftaran->pasien_id)
-                    ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                    ->whereIn('status_pelayanan', self::ACTIVE_STATUSES)
                     ->exists();
 
                 if ($hasActive) {
@@ -144,9 +158,118 @@ class Pendaftaran extends Model
                 $pendaftaran->cara_masuk = 'Datang Sendiri';
             }
             if (empty($pendaftaran->status_pelayanan)) {
-                $pendaftaran->status_pelayanan = 'Menunggu';
+                $pendaftaran->status_pelayanan = self::STATUS_MENUNGGU;
             }
         });
+    }
+
+    public function hasPemeriksaanFisik(): bool
+    {
+        return $this->pemeriksaanFisiks()->exists();
+    }
+
+    public function hasPemeriksaanFisikByProfesi(string|array $profesi): bool
+    {
+        return $this->pemeriksaanFisiks()
+            ->whereHas('pegawai', fn ($query) => $query->whereIn('profesi', (array) $profesi))
+            ->exists();
+    }
+
+    public function hasCppt(): bool
+    {
+        return $this->cpptRecords()->exists();
+    }
+
+    public function hasCpptByProfesi(string|array $profesi): bool
+    {
+        $profesi = (array) $profesi;
+
+        return $this->cpptRecords()
+            ->where(function ($query) use ($profesi) {
+                $query->whereHas('pegawai', fn ($pegawai) => $pegawai->whereIn('profesi', $profesi))
+                    ->orWhere(function ($legacy) use ($profesi) {
+                        $legacy->whereDoesntHave('pegawai')->whereIn('profesi', $profesi);
+                    });
+            })
+            ->exists();
+    }
+
+    public function isSiapUntukDokter(): bool
+    {
+        return $this->hasPemeriksaanFisikByProfesi(['Perawat', 'Bidan'])
+            && $this->hasCpptByProfesi(['Perawat', 'Bidan']);
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status_pelayanan) {
+            self::STATUS_MENUNGGU            => 'Menunggu Perawat',
+            self::STATUS_PEMERIKSAAN_PERAWAT => 'Pemeriksaan Perawat',
+            self::STATUS_MENUNGGU_DOKTER     => 'Menunggu Dokter',
+            self::STATUS_SEDANG_DIPERIKSA    => 'Sedang Diperiksa Dokter',
+            self::STATUS_SELESAI             => 'Pelayanan Selesai',
+            self::STATUS_BATAL               => 'Dibatalkan',
+            default                          => (string) $this->status_pelayanan,
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status_pelayanan) {
+            self::STATUS_MENUNGGU            => '#f59e0b', // amber
+            self::STATUS_PEMERIKSAAN_PERAWAT => '#3b82f6', // blue
+            self::STATUS_MENUNGGU_DOKTER     => '#8b5cf6', // purple
+            self::STATUS_SEDANG_DIPERIKSA    => '#06b6d4', // cyan
+            self::STATUS_SELESAI             => '#10b981', // emerald
+            self::STATUS_BATAL               => '#ef4444', // red
+            default                          => '#94a3b8',
+        };
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status_pelayanan', self::ACTIVE_STATUSES);
+    }
+
+    public function scopeUntukDokter($query, ?int $poliId = null, ?int $dokterId = null)
+    {
+        // Dokter HANYA melihat pasien setelah perawat selesai mengisi pemeriksaan & CPPT (Menunggu Dokter, Sedang Diperiksa, Selesai)
+        $query->whereIn('status_pelayanan', [
+            self::STATUS_MENUNGGU_DOKTER,
+            self::STATUS_SEDANG_DIPERIKSA,
+            self::STATUS_SELESAI,
+        ]);
+
+        if ($poliId) {
+            $query->where('poli_id', $poliId);
+        }
+
+        if ($dokterId) {
+            $query->where(function ($q) use ($dokterId) {
+                $q->where('dokter_id', $dokterId)
+                  ->orWhereNull('dokter_id');
+            });
+        }
+
+        return $query;
+    }
+
+    public function scopeUntukPerawat($query, ?int $poliId = null)
+    {
+        // Perawat melihat dari awal pendaftaran (Menunggu) hingga Selesai untuk poli terkait
+        $query->whereIn('status_pelayanan', [
+            self::STATUS_MENUNGGU,
+            self::STATUS_PEMERIKSAAN_PERAWAT,
+            self::STATUS_MENUNGGU_DOKTER,
+            self::STATUS_SEDANG_DIPERIKSA,
+            self::STATUS_SELESAI,
+        ]);
+
+        if ($poliId) {
+            $query->where('poli_id', $poliId);
+        }
+
+        return $query;
     }
 
     public function pasien(): BelongsTo

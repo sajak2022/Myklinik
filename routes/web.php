@@ -1,6 +1,6 @@
 <?php
 
-use App\Filament\Resources\Pendaftarans\PendaftaranResource;
+use App\Filament\Pages\KunjunganPasien;
 use App\Models\Pendaftaran;
 use App\Models\User;
 use Filament\Notifications\Notification;
@@ -19,7 +19,7 @@ Route::post('/admin/pelayanan/selesaikan/{id?}', function ($id = null) {
 
     $pendaftaranId = $id ?: session('active_pendaftaran_id');
     if (! $pendaftaranId) {
-        $queryActive = Pendaftaran::whereIn('status_pelayanan', ['Sedang Diperiksa', 'Menunggu'])->latest('tanggal_pendaftaran');
+        $queryActive = Pendaftaran::where('status_pelayanan', Pendaftaran::STATUS_SEDANG_DIPERIKSA)->latest('tanggal_pendaftaran');
         if (! $user->hasRole('super_admin') && $user->pegawai?->poli_id) {
             $queryActive->where('poli_id', $user->pegawai->poli_id);
         }
@@ -29,10 +29,10 @@ Route::post('/admin/pelayanan/selesaikan/{id?}', function ($id = null) {
     }
 
     if (! $pendaftaran) {
-        return redirect()->to(PendaftaranResource::getUrl('index'));
+        return redirect()->to(KunjunganPasien::getUrl());
     }
 
-    $pendaftaran->update(['status_pelayanan' => 'Selesai']);
+    $pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_SELESAI]);
     session()->forget('active_pendaftaran_id');
 
     Notification::make()
@@ -41,5 +41,5 @@ Route::post('/admin/pelayanan/selesaikan/{id?}', function ($id = null) {
         ->success()
         ->send();
 
-    return redirect()->to(PendaftaranResource::getUrl('index'));
+    return redirect()->to(KunjunganPasien::getUrl());
 })->middleware(['web', 'auth'])->name('pelayanan.selesaikan');

@@ -54,86 +54,143 @@ class CpptPasien extends Page implements HasForms, HasTable
     public ?Pendaftaran $pendaftaran = null;
     public ?array $data = [];
 
-    #[On('trigger-selesaikan-pelayanan')]
-    public function triggerSelesaikanPelayanan(): void
+    #[On('trigger-batalkan-pendaftaran')]
+    public function triggerBatalkanPendaftaran(): void
     {
-        $this->mountAction('selesaikanPelayanan');
+        $this->mountAction('batalkanPendaftaran');
     }
 
-    public function selesaikanPelayananAction(): Action
+    public function batalkanPendaftaranAction(): Action
     {
-        return Action::make('selesaikanPelayanan')
-            ->label('Selesaikan Pelayanan')
-            ->icon('heroicon-m-check-badge')
-            ->color('success')
+        return Action::make('batalkanPendaftaran')
+            ->label('Batalkan Pendaftaran')
+            ->icon('heroicon-m-x-circle')
+            ->color('danger')
             ->requiresConfirmation()
-            ->modalHeading('Selesaikan Pelayanan Pasien?')
-            ->modalDescription(fn () => "Apakah Anda yakin ingin menyelesaikan pelayanan untuk pasien {$this->pendaftaran?->pasien?->nama} ({$this->pendaftaran?->no_pendaftaran})?")
-            ->modalSubmitActionLabel('Ya, Selesaikan')
+            ->modalHeading('Batalkan Kunjungan Pasien?')
+            ->modalDescription(fn () => "Apakah Anda yakin ingin membatalkan kunjungan pelayanan pasien {$this->pendaftaran?->pasien?->nama}?")
+            ->modalSubmitActionLabel('Ya, Batalkan')
             ->action(function () {
                 if (! $this->pendaftaran) {
                     return;
                 }
 
-                $this->pendaftaran->update(['status_pelayanan' => 'Selesai']);
+                $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_BATAL]);
                 session()->forget('active_pendaftaran_id');
 
                 Notification::make()
-                    ->title('Pelayanan Selesai')
-                    ->body("Pelayanan untuk pasien {$this->pendaftaran->pasien?->nama} telah berhasil diselesaikan.")
+                    ->title('Pendaftaran Dibatalkan')
+                    ->body("Kunjungan pasien {$this->pendaftaran->pasien?->nama} telah dibatalkan.")
+                    ->warning()
+                    ->send();
+
+                $this->redirect(\App\Filament\Pages\KunjunganPasien::getUrl());
+            });
+    }
+
+    public function teruskanKeDokterAction(): Action
+    {
+        return Action::make('teruskanKeDokter')
+            ->label('Kirim / Teruskan ke Dokter')
+            ->icon('heroicon-m-paper-airplane')
+            ->color('primary')
+            ->requiresConfirmation()
+            ->modalHeading('Teruskan Pasien ke Dokter?')
+            ->modalDescription(function () {
+                $nama = $this->pendaftaran?->pasien?->nama ?? 'Pasien';
+                $dokter = $this->pendaftaran?->dokter?->nama_lengkap ?? 'Dokter Pemeriksa';
+                return "Apakah Anda yakin hasil pemeriksaan fisik (TTV) dan CPPT untuk pasien {$nama} telah lengkap dan siap diperiksa oleh {$dokter}?";
+            })
+            ->modalSubmitActionLabel('Ya, Teruskan ke Dokter')
+            ->action(function () {
+                if (! $this->pendaftaran) {
+                    return;
+                }
+
+                if (! $this->pendaftaran->hasPemeriksaanFisik() || ! $this->pendaftaran->hasCppt()) {
+                    Notification::make()
+                        ->title('Pemeriksaan Belum Lengkap')
+                        ->body('Perawat wajib mengisi Pemeriksaan Fisik (Tanda Vital) dan Catatan CPPT terlebih dahulu sebelum meneruskan pasien ke dokter.')
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                    return;
+                }
+
+                $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+                session()->forget('active_pendaftaran_id');
+
+                Notification::make()
+                    ->title('Pasien Berhasil Diteruskan ke Dokter')
+                    ->body("Pasien {$this->pendaftaran->pasien?->nama} telah diteruskan ke antrean dokter.")
                     ->success()
                     ->send();
 
-                $this->redirect(\App\Filament\Resources\Pendaftarans\PendaftaranResource::getUrl('index'));
+                $this->redirect(\App\Filament\Pages\KunjunganPasien::getUrl());
             });
+    }
+
+    public static function getNavigationUrl(array $parameters = []): string
+    {
+        $recordId = request()->route('record') ?: request()->query('record') ?: session('active_pendaftaran_id');
+
+        if ($recordId) {
+            return static::getUrl(['record' => $recordId]);
+        }
+
+        return parent::getNavigationUrl($parameters);
     }
 
     public function mount($record = null): void
     {
-        if ($record) {
-            $this->record = (int) $record;
-            $this->pendaftaran = Pendaftaran::with(['pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal', 'poli', 'dokter'])->find($this->record);
+        /** @var User|null $user */
+        $user = Auth::user();
+        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
+        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
+
+        $recordId = $record ?: request()->query('record') ?: session('active_pendaftaran_id');
+
+        if ($recordId) {
+            $this->record = (int) $recordId;
+            $this->pendaftaran = Pendaftaran::with([
+                'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
+                'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
+            ])->find($this->record);
+
             if ($this->pendaftaran) {
                 session(['active_pendaftaran_id' => $this->pendaftaran->id]);
+            } else {
+                session()->forget('active_pendaftaran_id');
             }
         }
 
-        // Cek session jika tidak ada record di URL
-        if (! $this->pendaftaran && session()->has('active_pendaftaran_id')) {
-            $sessId = (int) session('active_pendaftaran_id');
-            $this->pendaftaran = Pendaftaran::with(['pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal', 'poli', 'dokter'])->find($sessId);
-            if ($this->pendaftaran) {
-                $this->record = $this->pendaftaran->id;
-            }
-        }
-
-        // Jika masih belum ada record, cari kunjungan aktif atau kunjungan terbaru
+        // Jika belum ada record di URL/session, cari pendaftaran aktif untuk hari ini
         if (! $this->pendaftaran) {
-            /** @var User|null $user */
-            $user = Auth::user();
-
             $queryActive = Pendaftaran::query()
-                ->whereIn('status_pelayanan', ['Sedang Diperiksa', 'Menunggu'])
+                ->with([
+                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
+                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
+                ])
+                ->whereDate('tanggal_pendaftaran', today())
                 ->latest('tanggal_pendaftaran');
 
-            if ($user && ! $user->hasRole('super_admin')) {
-                $pegawai = $user->pegawai;
-                if ($pegawai && $pegawai->poli_id) {
-                    $queryActive->where('poli_id', $pegawai->poli_id);
-                }
+            $pegawai = $user?->pegawai;
+            if ($pegawai && $pegawai->poli_id && ! $user->hasRole('super_admin')) {
+                $queryActive->where('poli_id', $pegawai->poli_id);
             }
 
-            $this->pendaftaran = $queryActive->first();
-
-            if (! $this->pendaftaran) {
-                $queryLatest = Pendaftaran::query()->latest('tanggal_pendaftaran');
-                if ($user && ! $user->hasRole('super_admin')) {
-                    $pegawai = $user->pegawai;
-                    if ($pegawai && $pegawai->poli_id) {
-                        $queryLatest->where('poli_id', $pegawai->poli_id);
-                    }
+            if ($isDokter && ! $isAdmin) {
+                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_SEDANG_DIPERIKSA, Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+                if ($pegawai?->id) {
+                    $queryActive->where('dokter_id', $pegawai->id);
                 }
-                $this->pendaftaran = $queryLatest->first();
+                $this->pendaftaran = $queryActive->first();
+            } elseif ($isPerawat && ! $isAdmin) {
+                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU]);
+                $this->pendaftaran = $queryActive->first();
+            } else {
+                $this->pendaftaran = $queryActive->first();
             }
 
             if ($this->pendaftaran) {
@@ -366,6 +423,8 @@ class CpptPasien extends Page implements HasForms, HasTable
             'is_verified'    => false,
         ]);
 
+        $this->pendaftaran->load('pemeriksaanFisiks', 'cpptRecords');
+        $this->teruskanOtomatisJikaLengkap();
         $this->isiDefaultForm();
 
         Notification::make()
@@ -373,6 +432,14 @@ class CpptPasien extends Page implements HasForms, HasTable
             ->body('Catatan Perkembangan Pasien Terintegrasi telah berhasil dicatat.')
             ->success()
             ->send();
+    }
+
+    private function teruskanOtomatisJikaLengkap(): void
+    {
+        if ($this->pendaftaran->isSiapUntukDokter()
+            && in_array($this->pendaftaran->status_pelayanan, [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU], true)) {
+            $this->pendaftaran->update(['status_pelayanan' => Pendaftaran::STATUS_MENUNGGU_DOKTER]);
+        }
     }
 
     public function hapusCppt(int $id): void
@@ -439,5 +506,20 @@ class CpptPasien extends Page implements HasForms, HasTable
         }
 
         return $query->take(20)->get();
+    }
+
+    public function getHasPemeriksaanFisikProperty(): bool
+    {
+        return $this->pendaftaran ? $this->pendaftaran->hasPemeriksaanFisik() : false;
+    }
+
+    public function getHasCpptProperty(): bool
+    {
+        return $this->pendaftaran ? $this->pendaftaran->hasCppt() : false;
+    }
+
+    public function getIsSiapUntukDokterProperty(): bool
+    {
+        return $this->pendaftaran ? $this->pendaftaran->isSiapUntukDokter() : false;
     }
 }

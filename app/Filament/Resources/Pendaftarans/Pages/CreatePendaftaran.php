@@ -22,7 +22,7 @@ class CreatePendaftaran extends CreateRecord
 
         if ($pasienId = request()->query('pasien_id')) {
             $active = \App\Models\Pendaftaran::where('pasien_id', $pasienId)
-                ->whereIn('status_pelayanan', ['Menunggu', 'Sedang Diperiksa'])
+                ->whereIn('status_pelayanan', \App\Models\Pendaftaran::ACTIVE_STATUSES)
                 ->first();
 
             if ($active) {

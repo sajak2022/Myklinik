@@ -50,6 +50,15 @@ class PegawaiForm
                             ->label('Nama Lengkap')
                             ->required(),
 
+                        Select::make('jenis_kelamin')
+                            ->label('Jenis Kelamin')
+                            ->options([
+                                'Laki-laki' => 'Laki-laki',
+                                'Perempuan' => 'Perempuan',
+                            ])
+                            ->required()
+                            ->columnStart(3),
+
                         TextInput::make('gelar_belakang')
                             ->label('Gelar Belakang'),
 
@@ -69,14 +78,6 @@ class PegawaiForm
                             ->searchable()
                             ->preload()
                             ->helperText('Opsional: pilih akun login untuk pegawai ini'),
-
-                        Select::make('jenis_kelamin')
-                            ->label('Jenis Kelamin')
-                            ->options([
-                                'Laki-laki' => 'Laki-laki',
-                                'Perempuan' => 'Perempuan',
-                            ])
-                            ->required(),
 
                         Select::make('agama_detail_id')
                             ->label('Agama')
