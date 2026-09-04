@@ -11,6 +11,12 @@ class ListPendaftarans extends ListRecords
 
     protected string $view = 'filament.resources.pendaftarans.pages.list-pendaftarans';
 
+    public function mount(): void
+    {
+        parent::mount();
+        session()->forget('active_pendaftaran_id');
+    }
+
     public function getBreadcrumbs(): array
     {
         return [];

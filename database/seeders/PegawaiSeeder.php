@@ -6,7 +6,6 @@ use App\Models\Country;
 use App\Models\KontakPegawai;
 use App\Models\Pegawai;
 use App\Models\Poli;
-use App\Models\ReferensiDetail;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -19,9 +18,6 @@ class PegawaiSeeder extends Seeder
     {
         $region = $this->regionPath();
         $countryId = Country::where('code', 'ID')->value('id') ?? Country::query()->value('id');
-        $agamaId = $this->referenceId('Agama', 'Islam');
-        $ktpId = $this->referenceId('Jenis Kartu Identitas', 'Kartu Tanda Penduduk (KTP)');
-        $contactTypeId = $this->referenceId('Jenis Kontak', 'Telepon Seluler');
         $poliUmum = Poli::firstOrCreate(['nama' => 'Poli Umum'], ['status' => true]);
         $poliGigi = Poli::firstOrCreate(['nama' => 'Poli Gigi'], ['status' => true]);
 
@@ -36,7 +32,7 @@ class PegawaiSeeder extends Seeder
             ['perawatgigi', 'perawat.gigi@myklinik.test', 'Ns. Eka Wulandari', 'Eka Wulandari', 'Perawat', $poliGigi, 'Perempuan', '1993-06-09', '081234570004', 'SIP-PG-0001', 'STR-PG-0001'],
         ];
 
-        DB::transaction(function () use ($staff, $region, $countryId, $agamaId, $ktpId, $contactTypeId): void {
+        DB::transaction(function () use ($staff, $region, $countryId): void {
             foreach ($staff as $index => [$username, $email, $displayName, $name, $profession, $poli, $gender, $birthDate, $phone, $sip, $str]) {
                 $number = $index + 1;
                 $postalCode = sprintf('401%d%d', $number, $number);
@@ -57,14 +53,14 @@ class PegawaiSeeder extends Seeder
                         'tanggal_lahir' => $birthDate,
                         'tempat_tanggal_lahir' => $region['regency'] . ', ' . date('d-m-Y', strtotime($birthDate)),
                         'jenis_kelamin' => $gender,
-                        'agama_detail_id' => $agamaId,
+                        'agama' => 'Islam',
                         'profesi' => $profession,
                         'poli_id' => $poli->id,
                         'no_str' => $str,
                         'str_berlaku_sampai' => '2029-12-31',
                         'no_sip' => $sip,
                         'sip_berlaku_sampai' => '2028-12-31',
-                        'jenis_kartu_detail_id' => $ktpId,
+                        'jenis_kartu' => 'Kartu Tanda Penduduk (KTP)',
                         'nomor_kartu' => sprintf('3273%08d%03d', 66000000 + $number, $number),
                         'alamat_kartu' => $address,
                         'rt_kartu' => sprintf('%03d', $number),
@@ -88,23 +84,10 @@ class PegawaiSeeder extends Seeder
 
                 KontakPegawai::updateOrCreate(
                     ['pegawai_id' => $pegawai->id],
-                    ['jenis_kontak_detail_id' => $contactTypeId, 'nomor_kontak' => $phone, 'status' => true]
+                    ['jenis_kontak' => 'Telepon Seluler', 'nomor_kontak' => $phone, 'status' => true]
                 );
             }
         });
-    }
-
-    private function referenceId(string $category, string $description): int
-    {
-        $id = ReferensiDetail::whereHas('referensi', fn ($query) => $query->where('nama', $category))
-            ->where('deskripsi', $description)
-            ->value('id');
-
-        if (! $id) {
-            throw new RuntimeException("Referensi {$category} / {$description} tidak ditemukan.");
-        }
-
-        return $id;
     }
 
     private function regionPath(): array

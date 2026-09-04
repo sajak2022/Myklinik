@@ -11,12 +11,12 @@ class Pasien extends Model
     protected $fillable = [
         'no_rm', 'pasien_tidak_dikenal', 'norm_manual', 'gelar_depan', 'nama', 'gelar_belakang', 'nama_panggilan',
         'tempat_lahir_regency_id', 'tanggal_lahir', 'jenis_kelamin',
-        'agama_detail_id', 'status_perkawinan_detail_id', 'pendidikan_detail_id', 'pekerjaan_detail_id',
-        'golongan_darah_detail_id', 'suku_bangsa_detail_id',
+        'agama', 'status_perkawinan', 'pendidikan', 'pekerjaan',
+        'golongan_darah', 'suku_bangsa',
         'country_id', 'status_pasien',
         'unit_eksternal_id', 'sub_unit_eksternal_id',
         'alamat', 'rt', 'rw', 'kode_pos', 'province_id', 'regency_id', 'district_id', 'village_id',
-        'sama_dengan_alamat_sekarang', 'jenis_kartu_detail_id', 'nomor_kartu',
+        'sama_dengan_alamat_sekarang', 'jenis_kartu', 'nomor_kartu',
         'alamat_kartu', 'rt_kartu', 'rw_kartu', 'kode_pos_kartu',
         'province_id_kartu', 'regency_id_kartu', 'district_id_kartu', 'village_id_kartu',
     ];
@@ -32,29 +32,15 @@ class Pasien extends Model
         return $this->hasMany(PasienKontak::class);
     }
 
-    public function keluargas(): HasMany
-    {
-        return $this->hasMany(PasienKeluarga::class);
-    }
-
     public function pendaftarans(): HasMany
     {
         return $this->hasMany(Pendaftaran::class);
     }
 
-    public function ibu(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function anamnesisRecords(): HasMany
     {
-        return $this->hasOne(PasienKeluarga::class)
-            ->whereHas('statusKeluarga', fn ($query) => $query->where('deskripsi', 'Ibu'));
+        return $this->hasMany(AnamnesisPasien::class);
     }
-
-    public function agama(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'agama_detail_id'); }
-    public function statusPerkawinan(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'status_perkawinan_detail_id'); }
-    public function pendidikan(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'pendidikan_detail_id'); }
-    public function pekerjaan(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'pekerjaan_detail_id'); }
-    public function golonganDarah(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'golongan_darah_detail_id'); }
-    public function sukuBangsa(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'suku_bangsa_detail_id'); }
-    public function jenisKartu(): BelongsTo { return $this->belongsTo(ReferensiDetail::class, 'jenis_kartu_detail_id'); }
 
     // Relasi ini WAJIB ada untuk Select::make('country_id')->relationship('country', 'name')
     public function country(): BelongsTo

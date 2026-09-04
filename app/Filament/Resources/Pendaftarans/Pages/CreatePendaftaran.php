@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Pendaftarans\Pages;
 use App\Filament\Resources\Pendaftarans\PendaftaranResource;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Facades\Auth;
 
 class CreatePendaftaran extends CreateRecord
 {
@@ -34,20 +33,13 @@ class CreatePendaftaran extends CreateRecord
                     ->send();
             }
 
-            $pasien = \App\Models\Pasien::find($pasienId);
             $hasHistory = \App\Models\Pendaftaran::where('pasien_id', $pasienId)->exists();
-            $kel = $pasien?->keluargas()->first();
 
             $this->form->fill([
                 'pasien_id'           => (int) $pasienId,
                 'tanggal_pendaftaran' => now(),
                 'jenis_pelayanan'     => 'Pelayanan Rawat Jalan',
                 'jenis_kunjungan'     => $hasHistory ? 'Lama' : 'Baru',
-                'ada_pj'              => (bool) $kel,
-                'pj_nama'             => $kel?->nama,
-                'pj_hubungan'         => $kel?->statusKeluarga?->deskripsi ?? 'Keluarga',
-                'pj_no_telepon'       => $kel?->telepon,
-                'pj_alamat'           => $kel?->alamat,
             ]);
         }
     }

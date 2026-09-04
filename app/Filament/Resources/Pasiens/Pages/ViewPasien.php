@@ -7,6 +7,7 @@ use Daljo25\FilamentTablerIcons\Enums\TablerIcon;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Support\Facades\Auth;
 
 class ViewPasien extends ViewRecord
 {
@@ -18,20 +19,12 @@ class ViewPasien extends ViewRecord
 
         $this->record->loadMissing([
             'tempatLahir',
-            'agama',
-            'pendidikan',
-            'pekerjaan',
-            'statusPerkawinan',
-            'golonganDarah',
-            'sukuBangsa',
             'country',
             'village',
             'district',
             'regency',
             'province',
-            'jenisKartu',
-            'keluargas.statusKeluarga',
-            'kontaks.jenisKontak',
+            'kontaks',
             'pendaftarans.poli',
             'pendaftarans.dokter',
         ]);
@@ -40,7 +33,7 @@ class ViewPasien extends ViewRecord
     protected function getHeaderActions(): array
     {
         /** @var \App\Models\User|null $user */
-        $user = auth()->user();
+        $user = Auth::user();
         $isDokterOrPerawat = $user && (
             $user->hasRole(['Dokter', 'Perawat', 'Bidan']) ||
             ($user->pegawai && in_array($user->pegawai->profesi, ['Dokter', 'Perawat', 'Bidan']))

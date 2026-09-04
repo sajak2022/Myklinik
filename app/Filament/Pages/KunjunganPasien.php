@@ -33,6 +33,11 @@ class KunjunganPasien extends Page implements HasTable
 
     protected string $view = 'filament.pages.kunjungan-pasien';
 
+    public function mount(): void
+    {
+        session()->forget('active_pendaftaran_id');
+    }
+
     public function table(Table $table): Table
     {
         /** @var User|null $user */
@@ -46,18 +51,18 @@ class KunjunganPasien extends Page implements HasTable
 
         $query = Pendaftaran::query()
             ->with(['pasien.tempatLahir', 'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'])
-            ->whereIn('status_pelayanan', [
-                Pendaftaran::STATUS_FINAL,
-                'Selesai',
-                'Final',
-                Pendaftaran::STATUS_BATAL,
-                'Batal',
-            ])
             ->latest('tanggal_pendaftaran')
             ->latest('id');
 
         if ($poliId && ! $user?->hasRole('super_admin')) {
             $query->where('poli_id', $poliId);
+        }
+
+        if ($isDokter && ! $isAdmin && $pegawai?->id) {
+            $query->where(function ($q) use ($pegawai) {
+                $q->where('dokter_id', $pegawai->id)
+                  ->orWhereNull('dokter_id');
+            });
         }
 
         return $table
@@ -96,60 +101,90 @@ class KunjunganPasien extends Page implements HasTable
             ])
             ->defaultSort('tanggal_pendaftaran', 'desc')
             ->filtersLayout(FiltersLayout::Dropdown)
-            ->filtersFormColumns(2)
+            ->filtersFormColumns(1)
             ->filters([
-                // Filter Periode Tanggal
-                SelectFilter::make('periode')
-                    ->label('Periode Waktu')
-                    ->placeholder('Hari Ini')
-                    ->options([
-                        'semua'      => 'Semua Periode',
-                        'minggu_ini' => 'Minggu Ini',
-                        'bulan_ini'  => 'Bulan Ini',
-                        'tahun_ini'  => 'Tahun Ini',
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? null) {
-                            'semua'      => $query,
-                            'minggu_ini' => $query->whereBetween('tanggal_pendaftaran', [now()->startOfWeek(), now()->endOfWeek()]),
-                            'bulan_ini'  => $query->whereMonth('tanggal_pendaftaran', now()->month)->whereYear('tanggal_pendaftaran', now()->year),
-                            'tahun_ini'  => $query->whereYear('tanggal_pendaftaran', now()->year),
-                            default      => $query->whereDate('tanggal_pendaftaran', today()),
-                        };
-                    }),
-
                 // Filter Status Pelayanan
                 SelectFilter::make('status_pelayanan')
                     ->label('Status Pelayanan')
-                    ->placeholder('Semua Status')
                     ->options([
-                        'selesai' => 'Pelayanan Selesai',
-                        'batal'   => 'Batal Kunjungan',
+                        'batal'           => 'Batal Kunjungan',
+                        'sedang_dilayani' => 'Pasien Berada di ruangan ini / Sedang dilayani',
+                        'selesai'         => 'Selesai',
                     ])
+                    ->default('sedang_dilayani')
+                    ->selectablePlaceholder(false)
                     ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? null) {
-                            'batal'   => $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_BATAL, 'Batal']),
-                            'selesai' => $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_FINAL, 'Selesai', 'Final']),
-                            default   => $query,
-                        };
+                        /** @var User|null $user */
+                        $user = Auth::user();
+                        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
+                        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
+                        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
+
+                        $value = $data['value'] ?? 'sedang_dilayani';
+
+                        if ($value === 'batal') {
+                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_BATAL, 'Batal']);
+                        }
+
+                        if ($value === 'selesai') {
+                            return $query->whereIn('status_pelayanan', [Pendaftaran::STATUS_FINAL, 'Selesai', 'Final']);
+                        }
+
+                        if ($value === 'sedang_dilayani') {
+                            if ($isDokter && ! $isAdmin) {
+                                return $query->where('status_pelayanan', Pendaftaran::STATUS_SEDANG_DIPERIKSA);
+                            }
+
+                            if ($isPerawat && ! $isAdmin) {
+                                return $query->where('status_pelayanan', Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT);
+                            }
+
+                            return $query->whereIn('status_pelayanan', [
+                                Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                                Pendaftaran::STATUS_SEDANG_DIPERIKSA,
+                            ]);
+                        }
+
+                        return $query;
                     }),
             ])
             ->actions([
-                // Tombol Lihat Data Detail Kunjungan (Abu-abu)
+                // 1. Tombol Lihat Detail Kunjungan
                 Action::make('lihat')
                     ->label('Lihat')
                     ->button()
                     ->color('gray')
                     ->size('sm')
                     ->icon('heroicon-m-eye')
+                    ->action(function (Pendaftaran $record, \Livewire\Component $livewire) {
+                        session(['active_pendaftaran_id' => $record->id]);
+                        $livewire->redirect(\App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id]));
+                    }),
+
+                // 2. Tombol Batal
+                Action::make('batal')
+                    ->label('Batal')
+                    ->button()
+                    ->color('danger')
+                    ->size('sm')
+                    ->icon('heroicon-m-x-circle')
+                    ->requiresConfirmation()
+                    ->modalHeading('Batalkan Kunjungan Pasien?')
+                    ->modalDescription('Apakah Anda yakin ingin membatalkan kunjungan pasien ini?')
                     ->visible(fn (Pendaftaran $record): bool => in_array($record->status_pelayanan, [
-                        Pendaftaran::STATUS_FINAL,
-                        'Selesai',
-                        'Final',
-                        Pendaftaran::STATUS_BATAL,
-                        'Batal',
+                        Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT,
+                        Pendaftaran::STATUS_SEDANG_DIPERIKSA,
+                        Pendaftaran::STATUS_MENUNGGU_DOKTER,
                     ]))
-                    ->url(fn (Pendaftaran $record): string => \App\Filament\Clusters\DetailKunjungan\Pages\PemeriksaanPasien::getUrl(['record' => $record->id])),
+                    ->action(function (Pendaftaran $record) {
+                        $record->update(['status_pelayanan' => Pendaftaran::STATUS_BATAL]);
+                        session()->forget('active_pendaftaran_id');
+
+                        Notification::make()
+                            ->title('Kunjungan Dibatalkan')
+                            ->warning()
+                            ->send();
+                    }),
             ]);
     }
 

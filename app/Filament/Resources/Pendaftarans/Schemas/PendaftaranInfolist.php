@@ -31,10 +31,10 @@ class PendaftaranInfolist
                             ->schema([
                                 RepeatableEntry::make('kartu_identitas')
                                     ->label('')
-                                    ->state(fn (Pendaftaran $record) => $record->pasien?->nomor_kartu || $record->pasien?->jenis_kartu_detail_id
+                                    ->state(fn (Pendaftaran $record) => $record->pasien?->nomor_kartu || $record->pasien?->jenis_kartu
                                         ? [[
                                             'no_kartu' => $record->pasien->nomor_kartu,
-                                            'jenis' => $record->pasien->jenisKartu?->deskripsi,
+                                            'jenis' => $record->pasien->jenis_kartu,
                                             'alamat' => $record->pasien->sama_dengan_alamat_sekarang ? $record->pasien->alamat : $record->pasien->alamat_kartu,
                                             'kelurahan' => $record->pasien->village?->name,
                                             'kecamatan' => $record->pasien->district?->name,
@@ -63,26 +63,6 @@ class PendaftaranInfolist
                                 // Tab asuransi / jaminan
                             ]),
 
-                        Tab::make('Keluarga Pasien')
-                            ->icon('heroicon-o-users')
-                            ->schema([
-                                RepeatableEntry::make('pasien.keluargas')
-                                    ->label('')
-                                    ->schema([
-                                        Grid::make(7)
-                                            ->schema([
-                                                TextEntry::make('statusKeluarga.deskripsi')->label('SHDK')->placeholder('-'),
-                                                TextEntry::make('nama')->label('Nama')->placeholder('-'),
-                                                TextEntry::make('jenis_kelamin')->label('Jenis Kelamin')->placeholder('-'),
-                                                TextEntry::make('tanggal_lahir')->label('Tgl. Lahir')->date('d/m/Y')->placeholder('-'),
-                                                TextEntry::make('pendidikan.deskripsi')->label('Pendidikan')->placeholder('-'),
-                                                TextEntry::make('pekerjaan.deskripsi')->label('Pekerjaan')->placeholder('-'),
-                                                TextEntry::make('telepon_seluler')->label('Telepon')->placeholder('-'),
-                                            ]),
-                                    ])
-                                    ->contained(false),
-                            ]),
-
                         Tab::make('Kontak')
                             ->icon('heroicon-o-phone')
                             ->schema([
@@ -91,7 +71,7 @@ class PendaftaranInfolist
                                     ->schema([
                                         Grid::make(2)
                                             ->schema([
-                                                TextEntry::make('jenisKontak.deskripsi')->label('Jenis Kontak')->placeholder('-'),
+                                                TextEntry::make('jenis_kontak')->label('Jenis Kontak')->placeholder('-'),
                                                 TextEntry::make('nomor_kontak')->label('Nomor Kontak')->placeholder('-'),
                                             ]),
                                     ])

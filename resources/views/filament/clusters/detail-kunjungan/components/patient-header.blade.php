@@ -97,7 +97,7 @@
 
                 {{-- Status Kepegawaian & Kategori Pasien --}}
                 <div class="text-xs font-semibold text-blue-700 dark:text-blue-400">
-                    {{ $pendaftaran->pasien?->pekerjaan?->deskripsi ?? 'Pegawai Negeri Sipil / ASN (KEMENKES)' }}
+                    {{ $pendaftaran->pasien?->pekerjaan ?? 'Pegawai Negeri Sipil / ASN (KEMENKES)' }}
                 </div>
 
                 {{-- Eselon 1 & Eselon 2 --}}
@@ -142,11 +142,7 @@
                 </div>
 
                 <div class="text-xs font-black text-gray-900 dark:text-white mt-1.5">
-                    {{ $pendaftaran->no_asuransi ? $pendaftaran->no_asuransi . ' - ' : ($pendaftaran->pasien?->nomor_kartu ? $pendaftaran->pasien->nomor_kartu . ' - ' : '') }}{{ $pendaftaran->penjamin ?? '0 Rupiah' }}
-                </div>
-
-                <div class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                    {{ $pendaftaran->kelas_rawat ?? 'Non Kelas' }}
+                    {{ $pendaftaran->pasien?->nomor_kartu ? $pendaftaran->pasien->nomor_kartu . ' - ' : '' }}{{ $pendaftaran->pasien?->jenis_kartu ?? 'KTP' }}
                 </div>
             </div>
 

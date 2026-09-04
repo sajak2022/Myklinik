@@ -28,17 +28,17 @@ class PasiensTable
 
                 // 1. Jika filter "Tampilkan Semua Pasien" diaktifkan
                 if ($semuaPasien) {
-                    return $query->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                    return $query->with(['tempatLahir', 'unitEksternal']);
                 }
 
                 // 2. Jika dipilih lewat Global Search -> Hanya tampilkan 1 pasien tersebut
                 if ($pasienId) {
-                    return $query->where('id', $pasienId)->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                    return $query->where('id', $pasienId)->with(['tempatLahir', 'unitEksternal']);
                 }
 
                 // 3. Jika dicari lewat search bar tabel -> Tampilkan hasil yang dicari
                 if (filled($search)) {
-                    return $query->with(['tempatLahir', 'keluargas.statusKeluarga', 'agama', 'unitEksternal']);
+                    return $query->with(['tempatLahir', 'unitEksternal']);
                 }
 
                 // 4. Default: Jangan tampilkan seluruh data pasien (tabel tetap kosong)
@@ -81,15 +81,6 @@ class PasiensTable
                     ->label('Tempat Lahir')
                     ->searchable(),
 
-                TextColumn::make('nama_ibu')
-                    ->label('Nama Ibu')
-                    ->placeholder('-')
-                    ->state(fn($record) => optional(
-                        $record->keluargas->first(
-                            fn($k) => str_contains(strtolower((string) optional($k->statusKeluarga)->deskripsi), 'ibu')
-                        )
-                    )->nama),
-
                 TextColumn::make('norm_manual')
                     ->label('Nomor Rekam Medis')
                     ->searchable()
@@ -100,7 +91,7 @@ class PasiensTable
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('agama.deskripsi')
+                TextColumn::make('agama')
                     ->label('Agama')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),

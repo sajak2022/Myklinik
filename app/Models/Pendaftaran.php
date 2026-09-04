@@ -24,21 +24,7 @@ class Pendaftaran extends Model
         'dokter_id',
         'petugas_id',
         'jenis_pelayanan',
-        'general_consent',
-        'consent_satusehat',
-        'resiko_jatuh',
         'jenis_kunjungan',
-        'cara_masuk',
-        'penjamin',
-        'no_asuransi',
-        'no_sep',
-        'kelas_rawat',
-        'is_rujukan',
-        'faskes_perujuk',
-        'no_rujukan',
-        'tgl_rujukan',
-        'dokter_perujuk',
-        'diagnosis_rujukan',
         'is_kecelakaan',
         'jenis_kecelakaan',
         'no_laporan_polisi',
@@ -47,33 +33,19 @@ class Pendaftaran extends Model
         'lokasi_kecelakaan',
         'pj_nama',
         'pj_hubungan',
-        'pj_tgl_lahir',
         'pj_pekerjaan',
         'pj_jenis_kartu',
         'pj_nomor_kartu',
         'pj_no_telepon',
         'pj_alamat',
-        'pengantar_nama',
-        'pengantar_hubungan',
-        'pengantar_no_telepon',
-        'pengantar_alamat',
         'status_pelayanan',
-        'biaya_pendaftaran',
-        'status_pembayaran',
         'catatan',
     ];
 
     protected $casts = [
         'tanggal_pendaftaran'     => 'datetime',
-        'tgl_rujukan'             => 'date',
         'tgl_kejadian_kecelakaan' => 'date',
-        'pj_tgl_lahir'            => 'date',
-        'general_consent'         => 'boolean',
-        'consent_satusehat'       => 'boolean',
-        'resiko_jatuh'            => 'boolean',
-        'is_rujukan'              => 'boolean',
         'is_kecelakaan'           => 'boolean',
-        'biaya_pendaftaran'       => 'decimal:2',
     ];
 
     public const STATUS_MENUNGGU = 'Menunggu';
@@ -146,19 +118,7 @@ class Pendaftaran extends Model
                 $pendaftaran->jenis_kunjungan = $hasHistory ? 'Lama' : 'Baru';
             }
 
-            // 5. Default Klinik Pegawai (Tanpa Biaya & Asuransi)
-            if (empty($pendaftaran->penjamin)) {
-                $pendaftaran->penjamin = 'Pegawai';
-            }
-            if (! isset($pendaftaran->biaya_pendaftaran)) {
-                $pendaftaran->biaya_pendaftaran = 0;
-            }
-            if (empty($pendaftaran->status_pembayaran)) {
-                $pendaftaran->status_pembayaran = 'Gratis';
-            }
-            if (empty($pendaftaran->cara_masuk)) {
-                $pendaftaran->cara_masuk = 'Datang Sendiri';
-            }
+            // 5. Default Status Pelayanan
             if (empty($pendaftaran->status_pelayanan)) {
                 $pendaftaran->status_pelayanan = self::STATUS_MENUNGGU;
             }
@@ -330,6 +290,16 @@ class Pendaftaran extends Model
     }
 
 
+
+    public function anamnesisRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AnamnesisPasien::class, 'pendaftaran_id')->latest('waktu_anamnesis');
+    }
+
+    public function anamnesisTerakhir(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(AnamnesisPasien::class, 'pendaftaran_id')->latestOfMany('waktu_anamnesis');
+    }
 
     public function asuhanKeperawatans(): \Illuminate\Database\Eloquent\Relations\HasMany
     {

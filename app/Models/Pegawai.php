@@ -16,10 +16,10 @@ class Pegawai extends Model
         'nip',
         'gelar_depan', 'nama_lengkap', 'gelar_belakang',
         'tempat_lahir_regency_id', 'tanggal_lahir',
-        'jenis_kelamin', 'agama_detail_id',
-        'profesi', 'jenis_spesialis_detail_id', 'poli_id',
+        'jenis_kelamin', 'agama',
+        'profesi', 'jenis_spesialis', 'poli_id',
         'no_str', 'str_berlaku_sampai', 'no_sip', 'sip_berlaku_sampai',
-        'jenis_kartu_detail_id', 'nomor_kartu',
+        'jenis_kartu', 'nomor_kartu',
         'alamat_kartu', 'rt_kartu', 'rw_kartu', 'kode_pos_kartu',
         'province_id_kartu', 'regency_id_kartu', 'district_id_kartu', 'village_id_kartu',
         'alamat', 'rt', 'rw', 'kode_pos',
@@ -44,18 +44,6 @@ class Pegawai extends Model
         return $this->hasMany(KontakPegawai::class);
     }
 
-    public function agama(): BelongsTo
-    {
-        return $this->belongsTo(ReferensiDetail::class, 'agama_detail_id');
-    }
-    public function jenisSpesialis(): BelongsTo
-    {
-        return $this->belongsTo(ReferensiDetail::class, 'jenis_spesialis_detail_id');
-    }
-    public function jenisKartu(): BelongsTo
-    {
-        return $this->belongsTo(ReferensiDetail::class, 'jenis_kartu_detail_id');
-    }
     public function poli(): BelongsTo
     {
         return $this->belongsTo(Poli::class);

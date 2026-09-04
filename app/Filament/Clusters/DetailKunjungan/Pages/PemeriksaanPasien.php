@@ -45,7 +45,7 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
 
     protected static ?string $slug = 'pemeriksaan-pasien/{record?}';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
 
     protected string $view = 'filament.pages.pemeriksaan-pasien';
 
@@ -307,16 +307,13 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
     {
         /** @var User|null $user */
         $user = Auth::user();
-        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
-        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
-        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
 
         $recordId = $record ?: request()->route('record') ?: request()->query('record') ?: session('active_pendaftaran_id');
 
         if ($recordId) {
             $this->record = (int) $recordId;
             $this->pendaftaran = Pendaftaran::with([
-                'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
+                'pasien.tempatLahir', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
                 'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
             ])->find($this->record);
 
@@ -325,48 +322,10 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
             } else {
                 session()->forget('active_pendaftaran_id');
             }
-        }
-
-        // Jika belum ada record di URL/session, cari pendaftaran aktif terakhir
-        if (! $this->pendaftaran) {
-            $queryActive = Pendaftaran::query()
-                ->with([
-                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
-                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
-                ])
-                ->latest('tanggal_pendaftaran')
-                ->latest('id');
-
-            $pegawai = $user?->pegawai;
-            if ($pegawai && $pegawai->poli_id && ! $user->hasRole('super_admin')) {
-                $queryActive->where('poli_id', $pegawai->poli_id);
-            }
-
-            if ($isDokter && ! $isAdmin) {
-                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_SEDANG_DIPERIKSA, Pendaftaran::STATUS_MENUNGGU_DOKTER]);
-                if ($pegawai?->id) {
-                    $queryActive->where('dokter_id', $pegawai->id);
-                }
-                $this->pendaftaran = $queryActive->first();
-            } elseif ($isPerawat && ! $isAdmin) {
-                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU]);
-                $this->pendaftaran = $queryActive->first();
-            } else {
-                $this->pendaftaran = $queryActive->first();
-            }
-
-            // Jika masih belum ada, ambil data pendaftaran terakhir apapun statusnya agar form tetap tampil
-            if (! $this->pendaftaran) {
-                $this->pendaftaran = Pendaftaran::with([
-                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
-                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
-                ])->latest('id')->first();
-            }
-
-            if ($this->pendaftaran) {
-                $this->record = $this->pendaftaran->id;
-                session(['active_pendaftaran_id' => $this->pendaftaran->id]);
-            }
+        } else {
+            $this->record = null;
+            $this->pendaftaran = null;
+            session()->forget('active_pendaftaran_id');
         }
 
         $this->form->fill([
@@ -443,7 +402,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->default(0)
                             ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, Get $get) {
-                                $set('gcs_total', (int) $get('gcs_eye') + (int) $get('gcs_motorik') + (int) $get('gcs_verbal'));
                                 self::calculateEwss($set, $get);
                             }),
 
@@ -456,7 +414,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->live(onBlur: true)
                             ->afterStateUpdated(function (Set $set, Get $get) {
                                 $set('gcs_total', (int) $get('gcs_eye') + (int) $get('gcs_motorik') + (int) $get('gcs_verbal'));
-                                self::calculateEwss($set, $get);
                             }),
 
                         TextInput::make('gcs_verbal')
@@ -493,7 +450,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
 
                         TextInput::make('diastolik')
                             ->label('TD Diastolik')
-                            ->suffix('mmHg')
                             ->numeric()
                             ->default(0),
 
@@ -508,7 +464,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                         TextInput::make('frekuensi_nafas')
                             ->label('Frekuensi Nafas')
                             ->suffix('x/mnt')
-                            ->numeric()
                             ->default(0)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
@@ -517,7 +472,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->label('Suhu Tubuh')
                             ->suffix('°C')
                             ->numeric()
-                            ->step(0.1)
                             ->default(0)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
@@ -527,7 +481,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                             ->suffix('%')
                             ->numeric()
                             ->default(0)
-                            ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get)),
 
                         Select::make('alat_bantu_nafas')
@@ -536,7 +489,6 @@ class PemeriksaanPasien extends Page implements HasForms, HasTable
                                 'Tidak' => 'Tidak (Udara Bebas)',
                                 'Ya'    => 'Ya (Oksigen Tambahan)',
                             ])
-                            ->default('Tidak')
                             ->selectablePlaceholder(false)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn (Set $set, Get $get) => self::calculateEwss($set, $get))

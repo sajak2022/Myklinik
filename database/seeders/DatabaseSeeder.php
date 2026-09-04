@@ -35,7 +35,6 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call([
-            ReferensiSeeder::class,
             UnitEksternalSeeder::class,
             PenyediaSeeder::class,
             TindakanSeeder::class,

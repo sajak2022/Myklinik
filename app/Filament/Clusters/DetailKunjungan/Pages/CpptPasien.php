@@ -46,7 +46,7 @@ class CpptPasien extends Page implements HasForms, HasTable
 
     protected static ?string $slug = 'cppt/{record?}';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     protected string $view = 'filament.pages.cppt-pasien';
 
@@ -297,16 +297,13 @@ class CpptPasien extends Page implements HasForms, HasTable
     {
         /** @var User|null $user */
         $user = Auth::user();
-        $isDokter = $user && ($user->hasRole('Dokter') || ($user->pegawai && $user->pegawai->profesi === 'Dokter'));
-        $isPerawat = $user && ($user->hasRole(['Perawat', 'Bidan']) || ($user->pegawai && in_array($user->pegawai->profesi, ['Perawat', 'Bidan'])));
-        $isAdmin = $user && ($user->hasRole(['super_admin', 'Admin']));
 
         $recordId = $record ?: request()->route('record') ?: request()->query('record') ?: session('active_pendaftaran_id');
 
         if ($recordId) {
             $this->record = (int) $recordId;
             $this->pendaftaran = Pendaftaran::with([
-                'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
+                'pasien.tempatLahir', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
                 'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
             ])->find($this->record);
 
@@ -315,48 +312,10 @@ class CpptPasien extends Page implements HasForms, HasTable
             } else {
                 session()->forget('active_pendaftaran_id');
             }
-        }
-
-        // Jika belum ada record di URL/session, cari pendaftaran aktif terakhir
-        if (! $this->pendaftaran) {
-            $queryActive = Pendaftaran::query()
-                ->with([
-                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
-                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
-                ])
-                ->latest('tanggal_pendaftaran')
-                ->latest('id');
-
-            $pegawai = $user?->pegawai;
-            if ($pegawai && $pegawai->poli_id && ! $user->hasRole('super_admin')) {
-                $queryActive->where('poli_id', $pegawai->poli_id);
-            }
-
-            if ($isDokter && ! $isAdmin) {
-                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_SEDANG_DIPERIKSA, Pendaftaran::STATUS_MENUNGGU_DOKTER]);
-                if ($pegawai?->id) {
-                    $queryActive->where('dokter_id', $pegawai->id);
-                }
-                $this->pendaftaran = $queryActive->first();
-            } elseif ($isPerawat && ! $isAdmin) {
-                $queryActive->whereIn('status_pelayanan', [Pendaftaran::STATUS_PEMERIKSAAN_PERAWAT, Pendaftaran::STATUS_MENUNGGU]);
-                $this->pendaftaran = $queryActive->first();
-            } else {
-                $this->pendaftaran = $queryActive->first();
-            }
-
-            // Jika masih belum ada, ambil data pendaftaran terakhir apapun statusnya agar form tetap tampil
-            if (! $this->pendaftaran) {
-                $this->pendaftaran = Pendaftaran::with([
-                    'pasien.tempatLahir', 'pasien.pekerjaan', 'pasien.unitEksternal', 'pasien.subUnitEksternal',
-                    'poli', 'dokter', 'pemeriksaanFisiks', 'cpptRecords'
-                ])->latest('id')->first();
-            }
-
-            if ($this->pendaftaran) {
-                $this->record = $this->pendaftaran->id;
-                session(['active_pendaftaran_id' => $this->pendaftaran->id]);
-            }
+        } else {
+            $this->record = null;
+            $this->pendaftaran = null;
+            session()->forget('active_pendaftaran_id');
         }
 
         $this->isiDefaultForm();

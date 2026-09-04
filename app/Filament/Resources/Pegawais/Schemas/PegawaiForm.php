@@ -4,9 +4,9 @@ namespace App\Filament\Resources\Pegawais\Schemas;
 
 use App\Models\District;
 use App\Models\Province;
-use App\Models\ReferensiDetail;
 use App\Models\Regency;
 use App\Models\Village;
+use App\Support\ReferensiOpsi;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -39,34 +39,36 @@ class PegawaiForm
                     ])
                     ->schema([
                         TextInput::make('nip')
-                            ->label('NIP')
-                            ->required()
-                            ->unique(ignoreRecord: true),
+                            ->label('NIP / Nomor Pegawai')
+                            ->placeholder('Contoh: 198501012010011001')
+                            ->unique(ignoreRecord: true)
+                            ->columnSpan(1),
 
                         TextInput::make('gelar_depan')
-                            ->label('Gelar Depan'),
+                            ->label('Gelar Depan')
+                            ->placeholder('Contoh: dr., Ns., Apt.'),
 
                         TextInput::make('nama_lengkap')
                             ->label('Nama Lengkap')
                             ->required(),
 
-                        Select::make('jenis_kelamin')
-                            ->label('Jenis Kelamin')
-                            ->options([
-                                'Laki-laki' => 'Laki-laki',
-                                'Perempuan' => 'Perempuan',
-                            ])
-                            ->required()
-                            ->columnStart(3),
-
                         TextInput::make('gelar_belakang')
-                            ->label('Gelar Belakang'),
+                            ->label('Gelar Belakang')
+                            ->placeholder('Contoh: S.Ked, Sp.A, M.Kes'),
 
                         Select::make('tempat_lahir_regency_id')
                             ->label('Tempat Lahir')
                             ->relationship('tempatLahir', 'name')
                             ->searchable()
                             ->preload(),
+
+                        Select::make('jenis_kelamin')
+                            ->label('Jenis Kelamin')
+                            ->options([
+                                'Laki-Laki' => 'Laki-Laki',
+                                'Perempuan' => 'Perempuan',
+                            ])
+                            ->required(),
 
                         DatePicker::make('tanggal_lahir')
                             ->label('Tanggal Lahir')
@@ -79,35 +81,27 @@ class PegawaiForm
                             ->preload()
                             ->helperText('Opsional: pilih akun login untuk pegawai ini'),
 
-                        Select::make('agama_detail_id')
+                        Select::make('agama')
                             ->label('Agama')
-                            ->options(fn() => ReferensiDetail::whereHas(
-                                'referensi',
-                                fn($q) => $q->where('nama', 'Agama')
-                            )->pluck('deskripsi', 'id'))
+                            ->placeholder('[ Pilih Agama ]')
+                            ->options(ReferensiOpsi::agama())
                             ->searchable()
                             ->preload(),
 
                         Select::make('profesi')
                             ->label('Profesi')
-                            ->options(fn() => ReferensiDetail::whereHas(
-                                'referensi',
-                                fn($q) => $q->where('nama', 'Pegawai')
-                            )->where('status', true)
-                                ->orderBy('urutan')
-                                ->pluck('deskripsi', 'deskripsi'))
+                            ->placeholder('[ Pilih Profesi ]')
+                            ->options(ReferensiOpsi::profesiPegawai())
                             ->searchable()
                             ->preload()
                             ->required()
                             ->live()
                             ->columnSpan(1),
 
-                        Select::make('jenis_spesialis_detail_id')
+                        Select::make('jenis_spesialis')
                             ->label('Jenis Spesialis/Subspesialis')
-                            ->options(fn() => ReferensiDetail::whereHas(
-                                'referensi',
-                                fn($q) => $q->where('nama', 'Jenis Spesialis/Subspesialis')
-                            )->pluck('deskripsi', 'id'))
+                            ->placeholder('[ Pilih Spesialis ]')
+                            ->options(ReferensiOpsi::jenisSpesialis())
                             ->searchable()
                             ->preload()
                             ->visible(fn($get) => $get('profesi') === 'Dokter'),
@@ -148,12 +142,10 @@ class PegawaiForm
                             ->icon('heroicon-o-identification')
                             ->columns(2)
                             ->schema([
-                                Select::make('jenis_kartu_detail_id')
+                                Select::make('jenis_kartu')
                                     ->label('Jenis Kartu Identitas')
-                                    ->options(fn() => ReferensiDetail::whereHas(
-                                        'referensi',
-                                        fn($q) => $q->where('nama', 'Jenis Kartu Identitas')
-                                    )->pluck('deskripsi', 'id'))
+                                    ->placeholder('[ Pilih Jenis Kartu ]')
+                                    ->options(ReferensiOpsi::jenisKartu())
                                     ->searchable()
                                     ->preload(),
 
@@ -300,12 +292,10 @@ class PegawaiForm
                                     ->placeholder('Contoh: 081234567890')
                                     ->required(),
 
-                                Select::make('jenis_kontak_detail_id')
+                                Select::make('jenis_kontak')
                                     ->label('Jenis')
-                                    ->options(fn() => ReferensiDetail::whereHas(
-                                        'referensi',
-                                        fn($q) => $q->where('nama', 'Jenis Kontak')
-                                    )->pluck('deskripsi', 'id'))
+                                    ->placeholder('[ Pilih Jenis Kontak ]')
+                                    ->options(ReferensiOpsi::jenisKontak())
                                     ->searchable()
                                     ->preload()
                                     ->required(),

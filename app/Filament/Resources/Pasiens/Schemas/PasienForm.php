@@ -6,9 +6,9 @@ use App\Models\Country;
 use App\Models\District;
 use App\Models\Province;
 use App\Models\Regency;
-use App\Models\ReferensiDetail;
 use App\Models\UnitEksternal;
 use App\Models\Village;
+use App\Support\ReferensiOpsi;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -41,30 +41,27 @@ class PasienForm
                     ])
                     ->schema([
                         TextInput::make('no_rm')
-                            ->label('Nomor RM')
-                            ->default(function () {
-                                $last = \App\Models\Pasien::whereNotNull('no_rm')
-                                    ->where('norm_manual', 'REGEXP', '^[0-9]+$')
-                                    ->orderByRaw('CAST(norm_manual AS UNSIGNED) DESC')
-                                    ->value('no_rm');
+                            ->label('No. RM (Rekam Medis)')
+                            ->placeholder('Otomatis oleh sistem')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->helperText('No RM terisi otomatis'),
 
-                                $next = $last ? ((int) $last) + 1 : 1;
-
-                                return str_pad((string) $next, 5, '0', STR_PAD_LEFT);
-                            })
-                            ->maxLength(10)
-                            ->unique(ignoreRecord: true)
-                            ->required(),
+                        TextInput::make('norm_manual')
+                            ->label('No. RM Manual / Lama')
+                            ->placeholder('Opsional jika ada'),
 
                         TextInput::make('gelar_depan')
-                            ->label('Gelar Depan'),
+                            ->label('Gelar Depan')
+                            ->placeholder('Contoh: dr., H., Prof.'),
 
                         TextInput::make('nama')
                             ->label('Nama Lengkap')
                             ->required(),
 
                         TextInput::make('gelar_belakang')
-                            ->label('Gelar Belakang'),
+                            ->label('Gelar Belakang')
+                            ->placeholder('Contoh: S.Kom, M.Kes'),
 
                         TextInput::make('nama_panggilan')
                             ->label('Nama Panggilan'),
@@ -87,12 +84,47 @@ class PasienForm
                             ])
                             ->required(),
 
-                        self::referensiSelect('agama_detail_id', 'Agama', 'Agama'),
-                        self::referensiSelect('status_perkawinan_detail_id', 'Status Perkawinan', 'Status Perkawinan'),
-                        self::referensiSelect('pendidikan_detail_id', 'Pendidikan', 'Pendidikan'),
-                        self::referensiSelect('pekerjaan_detail_id', 'Pekerjaan', 'Pekerjaan'),
-                        self::referensiSelect('golongan_darah_detail_id', 'Golongan Darah', 'Golongan Darah'),
-                        self::referensiSelect('suku_bangsa_detail_id', 'Suku Bangsa', 'Daftar Suku'),
+                        Select::make('agama')
+                            ->label('Agama')
+                            ->placeholder('[ Pilih Agama ]')
+                            ->options(ReferensiOpsi::agama())
+                            ->searchable()
+                            ->preload(),
+
+                        Select::make('status_perkawinan')
+                            ->label('Status Perkawinan')
+                            ->placeholder('[ Pilih Status Perkawinan ]')
+                            ->options(ReferensiOpsi::statusPerkawinan())
+                            ->searchable()
+                            ->preload(),
+
+                        Select::make('pendidikan')
+                            ->label('Pendidikan')
+                            ->placeholder('[ Pilih Pendidikan ]')
+                            ->options(ReferensiOpsi::pendidikan())
+                            ->searchable()
+                            ->preload(),
+
+                        Select::make('pekerjaan')
+                            ->label('Pekerjaan')
+                            ->placeholder('[ Pilih Pekerjaan ]')
+                            ->options(ReferensiOpsi::pekerjaan())
+                            ->searchable()
+                            ->preload(),
+
+                        Select::make('golongan_darah')
+                            ->label('Golongan Darah')
+                            ->placeholder('[ Pilih Golongan Darah ]')
+                            ->options(ReferensiOpsi::golonganDarah())
+                            ->searchable()
+                            ->preload(),
+
+                        Select::make('suku_bangsa')
+                            ->label('Suku Bangsa')
+                            ->placeholder('[ Pilih Suku Bangsa ]')
+                            ->options(ReferensiOpsi::sukuBangsa())
+                            ->searchable()
+                            ->preload(),
 
                         Select::make('country_id')
                             ->label('Kewarganegaraan')
@@ -148,7 +180,12 @@ class PasienForm
                                     ->live()
                                     ->columnSpanFull(),
 
-                                self::referensiSelect('jenis_kartu_detail_id', 'Jenis Kartu Identitas', 'Jenis Kartu Identitas')
+                                Select::make('jenis_kartu')
+                                    ->label('Jenis Kartu Identitas')
+                                    ->placeholder('[ Pilih Jenis Kartu ]')
+                                    ->options(ReferensiOpsi::jenisKartu())
+                                    ->searchable()
+                                    ->preload()
                                     ->columnSpan(1),
 
                                 TextInput::make('nomor_kartu')
@@ -312,95 +349,18 @@ class PasienForm
                                     ->placeholder('Contoh: 081234567890')
                                     ->required(),
 
-                                self::referensiSelect('jenis_kontak_detail_id', 'Jenis Kontak', 'Jenis Kontak')
+                                Select::make('jenis_kontak')
+                                    ->label('Jenis Kontak')
+                                    ->placeholder('[ Pilih Jenis Kontak ]')
+                                    ->options(ReferensiOpsi::jenisKontak())
+                                    ->searchable()
+                                    ->preload()
                                     ->required(),
                             ])
                             ->defaultItems(1)
                             ->addActionLabel('+ Tambah Kontak')
                             ->reorderable(false),
                     ]),
-
-                // 5. KELUARGA (REPEATER RAPI DENGAN 4 KOLOM)
-                Section::make('Keluarga')
-                    ->icon('heroicon-o-users')
-                    ->columnSpanFull()
-                    ->schema([
-                        Repeater::make('keluargas')
-                            ->relationship()
-                            ->label('')
-                            ->columns(4)
-                            ->schema([
-                                self::referensiSelect('status_keluarga_detail_id', 'Status Hubungan Keluarga', 'Status Hubungan Dalam Keluarga'),
-                                TextInput::make('nama')->label('Nama Lengkap')->required(),
-                                DatePicker::make('tanggal_lahir')->label('Tanggal Lahir')->displayFormat('d/m/Y'),
-                                Select::make('jenis_kelamin')->label('Jenis Kelamin')->options([
-                                    'Laki-Laki' => 'Laki-Laki',
-                                    'Perempuan' => 'Perempuan',
-                                ]),
-
-                                self::referensiSelect('pendidikan_detail_id', 'Pendidikan', 'Pendidikan'),
-                                self::referensiSelect('pekerjaan_detail_id', 'Pekerjaan', 'Pekerjaan'),
-                                self::referensiSelect('jenis_kartu_detail_id', 'Jenis Kartu Identitas', 'Jenis Kartu Identitas'),
-                                TextInput::make('nomor_kartu')->label('Nomor Kartu'),
-
-                                Textarea::make('alamat')->label('Alamat')->rows(2)->columnSpan(2),
-                                TextInput::make('telepon_seluler')->label('Telepon Seluler')->placeholder('Contoh: 081234567890')->columnSpan(2),
-
-                                TextInput::make('rt')->label('RT'),
-                                TextInput::make('rw')->label('RW'),
-                                TextInput::make('kode_pos')->label('Kode Pos'),
-                                Select::make('province_id')
-                                    ->label('Propinsi')
-                                    ->options(fn() => Province::pluck('name', 'code'))
-                                    ->searchable()
-                                    ->live()
-                                    ->afterStateUpdated(fn($state, $set, $old) => $old !== null ? $set('regency_id', null) : null),
-
-                                Select::make('regency_id')
-                                    ->label('Kabupaten / Kota')
-                                    ->options(fn($get) => $get('province_id')
-                                        ? Regency::where('code', 'like', $get('province_id') . '.%')->pluck('name', 'code')
-                                        : Regency::pluck('name', 'code'))
-                                    ->searchable()
-                                    ->live()
-                                    ->afterStateUpdated(fn($state, $set, $old) => $old !== null ? $set('district_id', null) : null),
-
-                                Select::make('district_id')
-                                    ->label('Kecamatan')
-                                    ->options(fn($get) => $get('regency_id')
-                                        ? District::where('code', 'like', $get('regency_id') . '.%')->pluck('name', 'code')
-                                        : District::pluck('name', 'code'))
-                                    ->searchable()
-                                    ->live()
-                                    ->afterStateUpdated(fn($state, $set, $old) => $old !== null ? $set('village_id', null) : null),
-
-                                Select::make('village_id')
-                                    ->label('Kelurahan / Desa')
-                                    ->options(fn($get) => $get('district_id')
-                                        ? Village::where('code', 'like', $get('district_id') . '.%')->pluck('name', 'code')
-                                        : Village::pluck('name', 'code'))
-                                    ->searchable(),
-                            ])
-                            ->defaultItems(1)
-                            ->addActionLabel('+ Tambah Keluarga')
-                            ->reorderable(false),
-                    ]),
             ]);
-    }
-
-    /**
-     * Select untuk field yang merujuk ke referensi_details, difilter berdasarkan nama kategori referensi.
-     */
-    protected static function referensiSelect(string $fieldName, string $label, string $namaReferensi): Select
-    {
-        return Select::make($fieldName)
-            ->label($label)
-            ->placeholder("[ Pilih {$label} ]")
-            ->options(fn() => ReferensiDetail::whereHas(
-                'referensi',
-                fn($query) => $query->whereRaw('LOWER(TRIM(nama)) = ?', [strtolower(trim($namaReferensi))])
-            )->pluck('deskripsi', 'id'))
-            ->searchable()
-            ->preload();
     }
 }

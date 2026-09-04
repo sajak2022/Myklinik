@@ -15,30 +15,30 @@
     @php
         $noRm = $pasien->no_rm ?? '-';
         $nama = trim(collect([$pasien->gelar_depan, $pasien->nama, $pasien->gelar_belakang])->filter()->join(' '));
-        
+
         $jk = strtolower($pasien->jenis_kelamin ?? '');
         $isFemale = str_contains($jk, 'p') || str_contains($jk, 'perempuan');
         $avatarSrc = $isFemale ? asset('profile/women.png') : asset('profile/men.png');
 
         $tempatLahir = $pasien->tempatLahir?->name ?? '-';
         $tglLahir = $pasien->tanggal_lahir ? \Carbon\Carbon::parse($pasien->tanggal_lahir)->translatedFormat('d F Y') : '-';
-        
+
         $umur = '-';
         if ($pasien->tanggal_lahir) {
             $diff = \Carbon\Carbon::parse($pasien->tanggal_lahir)->diff(now());
             $umur = "{$diff->y}th {$diff->m}bln {$diff->d}hr";
         }
 
-        $agama = $pasien->agama?->deskripsi ?? '-';
-        $golDarah = $pasien->golonganDarah?->deskripsi ?? '-';
-        $statusKawin = $pasien->statusPerkawinan?->deskripsi ?? '-';
-        $pendidikan = $pasien->pendidikan?->deskripsi ?? '-';
-        $pekerjaan = $pasien->pekerjaan?->deskripsi ?? '-';
-        $suku = $pasien->sukuBangsa?->deskripsi ?? '-';
+        $agama = $pasien->agama ?? '-';
+        $golDarah = $pasien->golongan_darah ?? '-';
+        $statusKawin = $pasien->status_perkawinan ?? '-';
+        $pendidikan = $pasien->pendidikan ?? '-';
+        $pekerjaan = $pasien->pekerjaan ?? '-';
+        $suku = $pasien->suku_bangsa ?? '-';
         $kewarganegaraan = $pasien->country?->name ?? 'Indonesia';
         $alamat = $pasien->alamat ?? '-';
         $rtRw = 'RT ' . ($pasien->rt ?? '-') . ' / RW ' . ($pasien->rw ?? '-') . ' (Pos: ' . ($pasien->kode_pos ?? '-') . ')';
-        
+
         $wilayah = collect([
             $pasien->village?->name,
             $pasien->district?->name,
@@ -49,7 +49,7 @@
 
     <div class="fi-section rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 mb-6">
         <div class="flex flex-col md:flex-row items-start gap-6">
-            
+
             {{-- SISI KIRI: KOTAK FOTO PROFIL PASIEN (SINGLE BOX) --}}
             <div class="flex items-center justify-center shrink-0 w-28 h-28 sm:w-32 sm:h-32 p-3 bg-gray-50 dark:bg-gray-800/80 rounded-2xl ring-1 ring-gray-950/10 dark:ring-white/10 shadow-sm self-start overflow-hidden">
                 <img
@@ -61,7 +61,7 @@
 
             {{-- SISI KANAN: DATA LENGKAP PASIEN TERORGANISIR --}}
             <div class="flex-1 min-w-0 w-full space-y-4">
-                
+
                 {{-- HEADER: NO. RM, STATUS, NAMA LENGKAP & BADGE PENDUKUNG --}}
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
                     <div>
@@ -103,7 +103,7 @@
 
                 {{-- GRID 3 KOLOM SEIMBANG DENGAN LABEL DAN NILAI YANG RAPI --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
-                    
+
                     {{-- KOLOM 1: DATA KELAHIRAN & PERSONAL --}}
                     <div class="space-y-2.5">
                         <div>

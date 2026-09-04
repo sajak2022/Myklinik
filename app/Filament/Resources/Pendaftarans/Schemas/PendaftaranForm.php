@@ -53,19 +53,8 @@ class PendaftaranForm
                                             ->send();
                                     }
 
-                                    $pasien = Pasien::find($state);
                                     $hasHistory = Pendaftaran::where('pasien_id', $state)->exists();
                                     $set('jenis_kunjungan', $hasHistory ? 'Lama' : 'Baru');
-
-                                    // Isi penanggung jawab jika pasien memiliki data keluarga
-                                    if ($pasien && $pasien->keluargas()->exists()) {
-                                        $kel = $pasien->keluargas()->first();
-                                        $set('ada_pj', true);
-                                        $set('pj_nama', $kel->nama);
-                                        $set('pj_hubungan', $kel->statusKeluarga?->deskripsi ?? 'Keluarga');
-                                        $set('pj_no_telepon', $kel->telepon);
-                                        $set('pj_alamat', $kel->alamat);
-                                    }
                                 }
                             })
                             ->rules([

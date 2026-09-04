@@ -19,6 +19,7 @@ use Illuminate\Session\Middleware\StartSession;
 use FinityLabs\FinAvatar\AvatarProviders\UiAvatarsProvider;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Navigation\NavigationGroup;
+use Daljo25\FilamentTablerIcons\Enums\TablerIcon;
 use JeffersonGoncalves\Filament\RefreshSidebar\RefreshSidebarPlugin;
 use Filament\Support\Icons\Heroicon;
 
@@ -73,7 +74,7 @@ class AdminPanelProvider extends PanelProvider
             ->defaultAvatarProvider(UiAvatarsProvider::class)
             ->navigationGroups([
                 NavigationGroup::make('Master')
-                    ->icon(Heroicon::Folder),
+                    ->icon(TablerIcon::SettingsCog),
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,

@@ -10,7 +10,10 @@
 @if ($isAuthorized)
     <div
         x-data="{
-            isDetail: window.location.pathname.includes('detail-kunjungan'),
+            isDetail: false,
+            checkPath() {
+                this.isDetail = window.location.pathname.includes('/detail-kunjungan/') || window.location.pathname.endsWith('/detail-kunjungan');
+            },
             bukaModalFinal() {
                 if (window.Livewire) {
                     window.Livewire.dispatch('trigger-selesaikan-pelayanan');
@@ -31,15 +34,13 @@
             }
         }"
         x-init="
-            const checkPath = () => {
-                isDetail = window.location.pathname.includes('detail-kunjungan');
-            };
-            window.addEventListener('livewire:navigated', checkPath);
-            window.addEventListener('popstate', checkPath);
             checkPath();
+            document.addEventListener('livewire:navigated', () => checkPath());
+            window.addEventListener('popstate', () => checkPath());
         "
         x-show="isDetail"
         x-cloak
+        style="display: none;"
         class="flex items-center me-0"
     >
         <div class="flex items-center gap-1 p-1 bg-gray-100/90 dark:bg-gray-800/90 border border-gray-200/80 dark:border-gray-700/70 rounded-xl shadow-xs backdrop-blur-xs">

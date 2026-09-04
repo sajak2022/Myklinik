@@ -27,10 +27,10 @@ class PasienInfolist
                             ->schema([
                                 RepeatableEntry::make('kartu_identitas')
                                     ->label('')
-                                    ->state(fn($record) => $record->nomor_kartu || $record->jenis_kartu_detail_id
+                                    ->state(fn($record) => $record->nomor_kartu || $record->jenis_kartu
                                         ? [[
                                             'no_kartu' => $record->nomor_kartu,
-                                            'jenis' => $record->jenisKartu?->deskripsi,
+                                            'jenis' => $record->jenis_kartu,
                                             'alamat' => $record->sama_dengan_alamat_sekarang ? $record->alamat : $record->alamat_kartu,
                                             'kelurahan' => $record->village?->name,
                                             'kecamatan' => $record->district?->name,
@@ -59,26 +59,6 @@ class PasienInfolist
                                 // Tambahkan komponen jaminan/asuransi di sini
                             ]),
 
-                        Tab::make('Keluarga Pasien')
-                            ->icon('heroicon-o-users')
-                            ->schema([
-                                RepeatableEntry::make('keluargas')
-                                    ->label('')
-                                    ->schema([
-                                        Grid::make(7)
-                                            ->schema([
-                                                TextEntry::make('statusKeluarga.deskripsi')->label('SHDK')->placeholder('-'),
-                                                TextEntry::make('nama')->label('Nama')->placeholder('-'),
-                                                TextEntry::make('jenis_kelamin')->label('Jenis Kelamin')->placeholder('-'),
-                                                TextEntry::make('tanggal_lahir')->label('Tgl. Lahir')->date('d/m/Y')->placeholder('-'),
-                                                TextEntry::make('pendidikan.deskripsi')->label('Pendidikan')->placeholder('-'),
-                                                TextEntry::make('pekerjaan.deskripsi')->label('Pekerjaan')->placeholder('-'),
-                                                TextEntry::make('telepon_seluler')->label('Telepon')->placeholder('-'),
-                                            ]),
-                                    ])
-                                    ->contained(false),
-                            ]),
-
                         Tab::make('Kontak')
                             ->icon('heroicon-o-phone')
                             ->schema([
@@ -87,7 +67,7 @@ class PasienInfolist
                                     ->schema([
                                         Grid::make(2)
                                             ->schema([
-                                                TextEntry::make('jenisKontak.deskripsi')->label('Jenis Kontak')->placeholder('-'),
+                                                TextEntry::make('jenis_kontak')->label('Jenis Kontak')->placeholder('-'),
                                                 TextEntry::make('nomor_kontak')->label('Nomor Kontak')->placeholder('-'),
                                             ]),
                                     ])
